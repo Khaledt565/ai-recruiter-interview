@@ -1,0 +1,27 @@
+{
+  "name": "ai-recruiter-interview-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Backend for AI recruiter interview application",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "lambda": "node src/lambda.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.515.0",
+    "@aws-sdk/client-dynamodb": "^3.515.0",
+    "@aws-sdk/client-polly": "^3.515.0",
+    "@aws-sdk/lib-dynamodb": "^3.515.0",
+    "express": "^4.18.2",
+    "ws": "^8.16.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
