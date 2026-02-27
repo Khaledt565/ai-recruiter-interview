@@ -23,3 +23,6 @@ Thumbs.db
 # AWS
 *.pem
 *.key
+
+# dependencies
+node_modules/
