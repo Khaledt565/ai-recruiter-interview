@@ -1,20 +1,18 @@
 // browser/src/app.js
 // Main application logic
 
-import { ChimeManager } from './chime-manager.js';
 import { TranscribeClient } from './transcribe-client.js';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
 
 class InterviewApp {
   constructor() {
-    this.chimeManager = new ChimeManager();
     this.transcribeClient = null;
     this.websocket = null;
     this.isInterviewActive = false;
 
     // Configuration - replace with your values
    this.config = {
-    backendHttpUrl: 'http://63.177.96.197:8080/interview/process', 
+    backendHttpUrl: 'http://63.179.199.108:8080/interview/process', 
   cognitoIdentityPoolId: 'eu-central-1:1f7604b2-8a28-44ad-b470-b4ae2b46d758',
   region: 'eu-central-1',
 };
@@ -158,29 +156,11 @@ async sendToLambda(meetingId, attendeeId, text) {
       this.websocket.close();
     }
 
-    await this.chimeManager.leaveMeeting();
-
     this.updateStatus('Interview ended', '');
     document.getElementById('start-btn').disabled = false;
     document.getElementById('stop-btn').disabled = true;
 
     console.log('Interview stopped');
-  }
-
-  async createChimeMeeting() {
-    const response = await fetch(this.config.chimeMeetingEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        // Add any required parameters
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to create Chime meeting');
-    }
-
-    return await response.json();
   }
 
   async connectWebSocket(meetingId, attendeeId) {

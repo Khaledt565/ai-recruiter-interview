@@ -2,24 +2,32 @@
   "name": "ai-recruiter-interview-backend",
   "version": "1.0.0",
   "type": "module",
-  "description": "Backend for AI recruiter interview application",
+  "description": "Modular backend for AI recruiter interview application with AWS services",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
-    "lambda": "node src/lambda.js"
+    "dev": "LOG_LEVEL=DEBUG nodemon src/server.js",
+    "lambda": "node src/lambda.js",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.515.0",
+    "@aws-sdk/client-cognito-identity": "^3.1004.0",
     "@aws-sdk/client-dynamodb": "^3.515.0",
     "@aws-sdk/client-polly": "^3.515.0",
     "@aws-sdk/lib-dynamodb": "^3.515.0",
+    "cors": "^2.8.5",
     "express": "^4.18.2",
-    "ws": "^8.16.0",
-    "cors": "^2.8.5"
+    "ws": "^8.16.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.3"
+    "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/ui": "^4.0.18",
+    "nodemon": "^3.0.3",
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=18.0.0"
