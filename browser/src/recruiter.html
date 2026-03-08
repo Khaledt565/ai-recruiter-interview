@@ -195,7 +195,11 @@
     </div>
 
     <script>
-        const BACKEND_URL = 'http://3.72.108.86:8080';
+        // Dynamic backend URL - localhost for local testing, Fargate IP for production
+        const backendHost = window.location.hostname === 'localhost' 
+            ? 'localhost:8080' 
+            : '3.72.108.86:8080';
+        const BACKEND_URL = `http://${backendHost}`;
         
         let generatedLink = '';
 

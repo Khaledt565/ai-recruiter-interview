@@ -30,6 +30,7 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: './src/recruiter.html',
       filename: 'recruiter.html',
+      chunks: [], // Don't inject bundle.js - recruiter.html has its own inline script
     }),
     new webpack.ProvidePlugin({
       Buffer: ['buffer', 'Buffer'],
