@@ -67,7 +67,7 @@ app.post('/interview/create', async (req, res) => {
       })
     );
 
-    const interviewLink = `http://63.179.199.108:8080/interview.html?id=${interviewId}`;
+    const interviewLink = `http://3.72.108.86:8080/interview.html?id=${interviewId}`;
 
     console.log(`✅ Created interview link for ${candidateName}`);
 
@@ -196,7 +196,7 @@ app.post('/interview/process', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Interview server running on port ${PORT}`);
 });
 
