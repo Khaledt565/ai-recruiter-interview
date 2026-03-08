@@ -23,6 +23,14 @@ module.exports = {
       template: './src/index.html',
       filename: 'index.html',
     }),
+    new HtmlWebpackPlugin({
+      template: './src/interview.html',
+      filename: 'interview.html',
+    }),
+    new HtmlWebpackPlugin({
+      template: './src/recruiter.html',
+      filename: 'recruiter.html',
+    }),
     new webpack.ProvidePlugin({
       Buffer: ['buffer', 'Buffer'],
       process: 'process/browser',
