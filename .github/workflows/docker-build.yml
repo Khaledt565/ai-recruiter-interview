@@ -21,18 +21,14 @@ jobs:
           aws-region: eu-central-1
       
       - name: Login to ECR
-        run: |
-          aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 090605004529.dkr.ecr.eu-central-1.amazonaws.com
+        run: aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 090605004529.dkr.ecr.eu-central-1.amazonaws.com
       
       - name: Build Docker image
-        run: |
-          docker build -t 090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:latest backend/
-          docker tag 090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:latest "090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:${{ github.run_id }}"
+        run: docker build -t 090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:latest backend/
       
       - name: Push image to ECR
-        run: |
-          docker push 090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:latest
-          docker push "090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:${{ github.run_id }}"
+        run: docker push 090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:latest
       
       - name: Output image URI
         run: echo "Image pushed: 090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:latest"
+
