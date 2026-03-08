@@ -195,12 +195,11 @@
     </div>
 
     <script>
-        // Dynamic backend URL - localhost for local testing, Fargate IP for production
+        // Dynamic backend URL - localhost for local testing, Fargate IP for production via CloudFront
         const backendHost = window.location.hostname === 'localhost' 
             ? 'localhost:8080' 
             : '3.72.108.86:8080';
         const BACKEND_URL = `http://${backendHost}`;
-        
         let generatedLink = '';
 
         document.getElementById('createForm').addEventListener('submit', async (e) => {
