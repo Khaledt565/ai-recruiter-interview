@@ -27,12 +27,12 @@ jobs:
       - name: Build Docker image
         run: |
           docker build -t 090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:latest backend/
-          docker tag 090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:latest 090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:$(date +%s)
+          docker tag 090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:latest "090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:${{ github.run_id }}"
       
       - name: Push image to ECR
         run: |
           docker push 090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:latest
-          docker push 090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:$(date +%s)
+          docker push "090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:${{ github.run_id }}"
       
       - name: Output image URI
         run: echo "Image pushed: 090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:latest"
