@@ -13,10 +13,10 @@ class InterviewApp {
     this.attendeeId = null;
     this.interviewId = null;
 
-    // Configuration - UPDATE WITH YOUR FARGATE IP!
+    // Configuration - Fargate Backend
     this.config = {
-      backendHttpUrl: 'http://localhost:8080/interview/process',
-      backendBaseUrl: 'http://localhost:8080',
+      backendHttpUrl: 'http://63.179.199.108:8080/interview/process',
+      backendBaseUrl: 'http://63.179.199.108:8080',
       cognitoIdentityPoolId: 'eu-central-1:1f7604b2-8a28-44ad-b470-b4ae2b46d758',
       region: 'eu-central-1',
     };
