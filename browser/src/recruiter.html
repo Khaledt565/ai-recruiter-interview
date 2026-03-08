@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Interview Link - AI Recruiter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        p.subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        label {
+            display: block;
+            color: #495057;
+            font-weight: 500;
+            margin-top: 15px;
+            margin-bottom: 5px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            margin-top: 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .result.show {
+            display: block;
+        }
+
+        .result h3 {
+            color: #28a745;
+            margin-bottom: 15px;
+        }
+
+        .link-box {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            word-break: break-all;
+            color: #667eea;
+            font-weight: 500;
+            margin: 15px 0;
+            border: 2px dashed #667eea;
+        }
+
+        .copy-btn {
+            background: #28a745;
+            margin-top: 10px;
+        }
+
+        .copy-btn:hover {
+            background: #218838;
+        }
+
+        .info {
+            color: #6c757d;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .error {
+            color: #dc3545;
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8d7da;
+            border-radius: 6px;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Create Interview Link</h1>
+        <p class="subtitle">Generate a unique interview link for your candidate</p>
+        
+        <form id="createForm">
+            <label for="candidateName">Candidate Name *</label>
+            <input 
+                type="text" 
+                id="candidateName" 
+                placeholder="John Doe"
+                required
+            >
+            
+            <label for="candidateEmail">Candidate Email *</label>
+            <input 
+                type="email" 
+                id="candidateEmail" 
+                placeholder="john@example.com"
+                required
+            >
+            
+            <label for="recruiterEmail">Your Email *</label>
+            <input 
+                type="email" 
+                id="recruiterEmail" 
+                placeholder="recruiter@company.com"
+                required
+            >
+            
+            <button type="submit" id="submitBtn">
+                Generate Interview Link
+            </button>
+        </form>
+
+        <div class="error" id="error"></div>
+        
+        <div class="result" id="result">
+            <h3>✅ Interview Link Created!</h3>
+            <p><strong>Send this link to the candidate:</strong></p>
+            <div class="link-box" id="linkDisplay"></div>
+            <button class="copy-btn" onclick="copyLink()">📋 Copy Link</button>
+            <p class="info">
+                ⏰ Link expires in 7 days<br>
+                🔒 Can only be used once<br>
+                👤 Personalized for: <span id="candidateNameDisplay"></span>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const BACKEND_URL = 'http://localhost:8080';
+        
+        let generatedLink = '';
+
+        document.getElementById('createForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const errorDiv = document.getElementById('error');
+            const resultDiv = document.getElementById('result');
+            
+            errorDiv.classList.remove('show');
+            resultDiv.classList.remove('show');
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Creating link...';
+            
+            const data = {
+                candidateName: document.getElementById('candidateName').value,
+                candidateEmail: document.getElementById('candidateEmail').value,
+                recruiterEmail: document.getElementById('recruiterEmail').value,
+            };
+            
+            try {
+                const response = await fetch(`${BACKEND_URL}/interview/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data),
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to create link');
+                }
+                
+                const result = await response.json();
+                
+                generatedLink = result.interviewLink;
+                document.getElementById('linkDisplay').textContent = generatedLink;
+                document.getElementById('candidateNameDisplay').textContent = data.candidateName;
+                resultDiv.classList.add('show');
+                
+                document.getElementById('createForm').reset();
+                
+                console.log('Interview link created:', result);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                errorDiv.textContent = `❌ Error: ${error.message}`;
+                errorDiv.classList.add('show');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Generate Interview Link';
+            }
+        });
+        
+        function copyLink() {
+            if (!generatedLink) {
+                alert('No link to copy!');
+                return;
+            }
+            
+            navigator.clipboard.writeText(generatedLink).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = '✅ Copied!';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 2000);
+            }).catch(err => {
+                console.error('Copy failed:', err);
+                alert('Failed to copy link. Please copy manually.');
+            });
+        }
+    </script>
+</body>
+</html>

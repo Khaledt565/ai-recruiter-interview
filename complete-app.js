@@ -1,11 +1,13 @@
 // browser/src/app.js
 // Main application logic with Interview Link Support
 
+import { ChimeManager } from './chime-manager.js';
 import { TranscribeClient } from './transcribe-client.js';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
 
 class InterviewApp {
   constructor() {
+    this.chimeManager = new ChimeManager();
     this.transcribeClient = null;
     this.websocket = null;
     this.isInterviewActive = false;
@@ -15,8 +17,8 @@ class InterviewApp {
 
     // Configuration - UPDATE WITH YOUR FARGATE IP!
     this.config = {
-      backendHttpUrl: 'http://localhost:8080/interview/process',
-      backendBaseUrl: 'http://localhost:8080',
+      backendHttpUrl: 'http://YOUR_FARGATE_IP:8080/interview/process',
+      backendBaseUrl: 'http://YOUR_FARGATE_IP:8080',
       cognitoIdentityPoolId: 'eu-central-1:1f7604b2-8a28-44ad-b470-b4ae2b46d758',
       region: 'eu-central-1',
     };
@@ -41,6 +43,15 @@ class InterviewApp {
           <button id="stop-btn" class="btn-danger" disabled>Stop Interview</button>
         </div>
 
+        <!-- HIDDEN: Transcript section -->
+        <!--
+        <div class="transcript-section">
+          <h3>Live Transcript</h3>
+          <div id="partial-transcript" class="partial"></div>
+          <div id="final-transcript" class="transcript"></div>
+        </div>
+        -->
+
         <div class="interviewer-section">
           <h3>Interviewer Says:</h3>
           <div id="interviewer-text" class="interviewer-text">Waiting to start...</div>
@@ -54,8 +65,10 @@ class InterviewApp {
     document.getElementById('stop-btn').addEventListener('click', () => this.stopInterview());
   }
 
-  // Check and validate interview link from URL
+  // NEW: Check and validate interview link from URL
   async checkInterviewLink() {
+    // Get interview ID from URL query parameter
+    // Example: http://localhost:8080/interview.html?id=int_12345
     const urlParams = new URLSearchParams(window.location.search);
     const interviewId = urlParams.get('id');
 
@@ -66,11 +79,12 @@ class InterviewApp {
     }
 
     this.interviewId = interviewId;
-    this.meetingId = interviewId;
+    this.meetingId = interviewId; // Use interview ID as meeting ID
 
     try {
       this.updateStatus('Validating your interview link...', 'connecting');
 
+      // Validate with backend
       const response = await fetch(
         `${this.config.backendBaseUrl}/interview/validate/${interviewId}`
       );
@@ -85,6 +99,7 @@ class InterviewApp {
       const data = await response.json();
       this.attendeeId = data.attendeeId;
 
+      // Show welcome message
       this.updateStatus(`Welcome ${data.candidateName}! Ready to start your interview.`, '');
       document.getElementById('interviewer-text').textContent = 
         `Hello ${data.candidateName}! Click "Start Interview" when you're ready.`;
@@ -159,6 +174,8 @@ class InterviewApp {
       this.websocket.close();
     }
 
+    await this.chimeManager.leaveMeeting();
+
     this.updateStatus('Interview ended', '');
     document.getElementById('start-btn').disabled = false;
     document.getElementById('stop-btn').disabled = true;
@@ -166,20 +183,28 @@ class InterviewApp {
     console.log('Interview stopped');
   }
 
+  // UPDATED: Hide transcript from user
   handleFinalTranscript(text) {
     console.log('Final transcript:', text);
+
+    // DON'T display transcript to user
+    // Just send to backend
 
     if (this.isInterviewActive) {
       this.sendToBackend(this.meetingId, this.attendeeId, text);
     }
   }
 
+  // UPDATED: Hide partial transcript
   handlePartialTranscript(text) {
+    // DON'T display partial transcripts
+    // Just log for debugging
     if (text) {
       console.log('Partial transcript:', text);
     }
   }
 
+  // UPDATED: Better error messages + progress indicator
   async sendToBackend(meetingId, attendeeId, text) {
     try {
       const response = await fetch(this.config.backendHttpUrl + '?withAudio=true', {
@@ -198,6 +223,7 @@ class InterviewApp {
       const data = await response.json();
       console.log('Backend response:', data);
 
+      // UPDATED: Show progress
       if (data.qIndex !== undefined) {
         const progress = ((data.qIndex / 5) * 100).toFixed(0);
         this.updateStatus(`Question ${data.qIndex + 1} of 5 (${progress}% complete)`, 'active');
@@ -219,10 +245,13 @@ class InterviewApp {
     } catch (error) {
       console.error('Backend error:', error);
       
+      // UPDATED: Better error messages
       let userMessage = 'Something went wrong. Please try again.';
       
       if (error.message.includes('NetworkError') || error.message.includes('fetch')) {
         userMessage = '❌ Connection lost. Check your internet connection.';
+      } else if (error.message.includes('NotAllowedError')) {
+        userMessage = '🎤 Please allow microphone access to continue.';
       }
       
       this.updateStatus(userMessage, 'error');

@@ -25,8 +25,8 @@ app.use(express.json());
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per IP
   message: { error: 'Too many requests, please try again later.' },
 });
 
@@ -37,18 +37,23 @@ app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
+// ===================================
 // NEW: Create interview link
+// ===================================
 app.post('/interview/create', async (req, res) => {
   try {
     const { candidateName, candidateEmail, recruiterEmail } = req.body;
 
+    // Validate inputs
     if (!candidateName || !candidateEmail || !recruiterEmail) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // Generate unique interview ID
     const interviewId = `int_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const attendeeId = `att_${Math.random().toString(36).substr(2, 9)}`;
 
+    // Save to DynamoDB
     await ddb.send(
       new PutCommand({
         TableName: SESSION_TABLE,
@@ -62,12 +67,13 @@ app.post('/interview/create', async (req, res) => {
           recruiterEmail,
           status: 'created',
           createdAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
         },
       })
     );
 
-    const interviewLink = `http://63.179.199.108:8080/interview.html?id=${interviewId}`;
+    // Generate link - UPDATE THIS URL when you deploy!
+    const interviewLink = `http://localhost:8080/interview.html?id=${interviewId}`;
 
     console.log(`✅ Created interview link for ${candidateName}`);
 
@@ -85,11 +91,14 @@ app.post('/interview/create', async (req, res) => {
   }
 });
 
+// ===================================
 // NEW: Validate interview link
+// ===================================
 app.get('/interview/validate/:interviewId', async (req, res) => {
   try {
     const { interviewId } = req.params;
 
+    // Get from DynamoDB
     const result = await ddb.send(
       new GetCommand({
         TableName: SESSION_TABLE,
@@ -104,10 +113,12 @@ app.get('/interview/validate/:interviewId', async (req, res) => {
       return res.status(404).json({ error: 'Interview not found' });
     }
 
+    // Check if expired
     if (new Date(result.Item.expiresAt) < new Date()) {
       return res.status(410).json({ error: 'Interview link expired' });
     }
 
+    // Check if already completed
     if (result.Item.status === 'completed') {
       return res.status(410).json({ error: 'Interview already completed' });
     }
@@ -124,11 +135,14 @@ app.get('/interview/validate/:interviewId', async (req, res) => {
   }
 });
 
+// ===================================
 // Existing: Process interview transcript
+// ===================================
 app.post('/interview/process', async (req, res) => {
   try {
     const { meetingId, attendeeId, transcriptText, isInit } = req.body;
 
+    // Validate inputs
     if (!meetingId || typeof meetingId !== 'string' || meetingId.length > 100) {
       return res.status(400).json({ error: 'Invalid meetingId' });
     }
@@ -152,7 +166,7 @@ app.post('/interview/process', async (req, res) => {
     if (result.done) {
       try {
         await s3.send(
-          new PutObjectCommand({
+          new PutCommand({
             Bucket: 'ai-recruiter-interviews-090605004529',
             Key: `interviews/${meetingId}-${Date.now()}.json`,
             Body: JSON.stringify({
@@ -181,6 +195,7 @@ app.post('/interview/process', async (req, res) => {
         console.log('✅ Saved completed interview to S3 and DynamoDB');
       } catch (saveError) {
         console.error('Save error:', saveError);
+        // Don't fail the request if save fails
       }
     }
 
@@ -196,11 +211,13 @@ app.post('/interview/process', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// Start server
 const server = app.listen(PORT, () => {
   console.log(`🚀 Interview server running on port ${PORT}`);
 });
 
-// WebSocket server for real-time communication
+// WebSocket server for real-time communication (optional - for future use)
 const wss = new WebSocketServer({ server });
 
 wss.on('connection', (ws, req) => {
@@ -213,7 +230,6 @@ wss.on('connection', (ws, req) => {
     try {
       const data = JSON.parse(message.toString());
 
-      // Handle connection setup
       if (data.type === 'connect') {
         meetingId = data.meetingId;
         attendeeId = data.attendeeId;
@@ -222,7 +238,6 @@ wss.on('connection', (ws, req) => {
         return;
       }
 
-      // Handle initialization
       if (data.type === 'init') {
         const result = await processTranscript({
           meetingId: meetingId || data.meetingId,
@@ -231,7 +246,6 @@ wss.on('connection', (ws, req) => {
           isInit: true,
         });
 
-        // Generate audio
         const audioBuffer = await generateSpeech(result.spokenText);
 
         ws.send(
@@ -246,7 +260,6 @@ wss.on('connection', (ws, req) => {
         return;
       }
 
-      // Handle transcript
       if (data.type === 'transcript') {
         if (!meetingId || !attendeeId) {
           ws.send(JSON.stringify({ type: 'error', error: 'Not connected' }));
@@ -260,7 +273,6 @@ wss.on('connection', (ws, req) => {
           isInit: false,
         });
 
-        // Generate audio response
         const audioBuffer = await generateSpeech(result.spokenText);
 
         ws.send(
