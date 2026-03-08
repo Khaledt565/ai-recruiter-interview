@@ -18,7 +18,8 @@ class InterviewApp {
       ? 'localhost:8080' 
       : '3.76.85.189:8080';
     
-    const backendProtocol = window.location.hostname === 'localhost' ? 'http' : 'https';
+    // Always use HTTPS (localhost uses self-signed cert, production uses self-signed cert)
+    const backendProtocol = 'https';
     
     this.config = {
       backendHttpUrl: `${backendProtocol}://${backendHost}/interview/create`,

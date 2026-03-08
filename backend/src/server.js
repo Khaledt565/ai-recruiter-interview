@@ -205,9 +205,10 @@ app.post('/interview/process', async (req, res) => {
 // Load HTTPS certificate and key
 const certPath = path.join(__dirname, '../certs/server.crt');
 const keyPath = path.join(__dirname, '../certs/server.key');
+const USE_HTTPS = process.env.USE_HTTPS !== 'false' && fs.existsSync(certPath) && fs.existsSync(keyPath);
 
 let server;
-if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+if (USE_HTTPS) {
   // Production: Use HTTPS with certificate
   const options = {
     cert: fs.readFileSync(certPath),
@@ -219,8 +220,8 @@ if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
     console.log(`📝 Certificate: ${certPath}`);
   });
 } else {
-  // Development/Fallback: Use HTTP if certificates not found
-  console.warn('⚠️  HTTPS certificates not found, falling back to HTTP');
+  // Development/Testing: Use HTTP
+  console.warn('⚠️  Using HTTP (development mode)');
   server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Interview server running on http://0.0.0.0:${PORT}`);
   });
