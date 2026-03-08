@@ -18,9 +18,11 @@ class InterviewApp {
       ? 'localhost:8080' 
       : '3.76.85.189:8080';
     
+    const backendProtocol = window.location.hostname === 'localhost' ? 'http' : 'https';
+    
     this.config = {
-      backendHttpUrl: `http://${backendHost}/interview/process`,
-      backendBaseUrl: `http://${backendHost}`,
+      backendHttpUrl: `${backendProtocol}://${backendHost}/interview/create`,
+      backendBaseUrl: `${backendProtocol}://${backendHost}`,
       cognitoIdentityPoolId: 'eu-central-1:1f7604b2-8a28-44ad-b470-b4ae2b46d758',
       region: 'eu-central-1',
     };
