@@ -16,7 +16,7 @@ class InterviewApp {
     // Configuration - Dynamic Backend URL
     const backendHost = window.location.hostname === 'localhost' 
       ? 'localhost:8080' 
-      : '3.72.108.86:8080';
+      : '3.76.85.189:8080';
     
     this.config = {
       backendHttpUrl: `http://${backendHost}/interview/process`,

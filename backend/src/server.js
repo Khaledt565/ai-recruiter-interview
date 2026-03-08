@@ -67,7 +67,7 @@ app.post('/interview/create', async (req, res) => {
       })
     );
 
-    const interviewLink = `https://dldhwj7f3kxts.cloudfront.net/interview.html?id=${interviewId}`;
+    const interviewLink = `https://d5k7p6fyxagls.cloudfront.net/interview.html?id=${interviewId}`;
 
     console.log(`✅ Created interview link for ${candidateName}`);
 
