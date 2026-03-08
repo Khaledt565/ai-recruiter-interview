@@ -13,12 +13,15 @@ RUN npm ci --only=production
 # Copy source code
 COPY src/ ./src/
 
+# Copy SSL certificates
+COPY certs/ ./certs/
+
 # Expose port
 EXPOSE 8080
 
-# Health check
+# Health check (HTTPS)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:8080/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+  CMD node -e "const https = require('https'); const fs = require('fs'); const opts = {rejectUnauthorized: false}; https.get('https://localhost:8080/health', opts, (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
 
 # Start server
 CMD ["node", "src/server.js"]

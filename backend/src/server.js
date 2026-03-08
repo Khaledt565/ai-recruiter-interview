@@ -2,6 +2,9 @@
 // Fargate Express server with WebSocket support + Interview Link Generation
 
 import express from 'express';
+import https from 'https';
+import fs from 'fs';
+import path from 'path';
 import { WebSocketServer } from 'ws';
 import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -10,6 +13,9 @@ import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dyn
 import { processTranscript } from './interview-engine.js';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -196,9 +202,29 @@ app.post('/interview/process', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Interview server running on port ${PORT}`);
-});
+// Load HTTPS certificate and key
+const certPath = path.join(__dirname, '../certs/server.crt');
+const keyPath = path.join(__dirname, '../certs/server.key');
+
+let server;
+if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+  // Production: Use HTTPS with certificate
+  const options = {
+    cert: fs.readFileSync(certPath),
+    key: fs.readFileSync(keyPath),
+  };
+  server = https.createServer(options, app);
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Interview server running SECURELY on https://0.0.0.0:${PORT}`);
+    console.log(`📝 Certificate: ${certPath}`);
+  });
+} else {
+  // Development/Fallback: Use HTTP if certificates not found
+  console.warn('⚠️  HTTPS certificates not found, falling back to HTTP');
+  server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Interview server running on http://0.0.0.0:${PORT}`);
+  });
+}
 
 // WebSocket server for real-time communication
 const wss = new WebSocketServer({ server });
