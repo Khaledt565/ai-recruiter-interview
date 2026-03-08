@@ -13,10 +13,14 @@ class InterviewApp {
     this.attendeeId = null;
     this.interviewId = null;
 
-    // Configuration - Fargate Backend
+    // Configuration - Dynamic Backend URL
+    const backendHost = window.location.hostname === 'localhost' 
+      ? 'localhost:8080' 
+      : '3.72.108.86:8080';
+    
     this.config = {
-      backendHttpUrl: 'http://3.72.108.86:8080/interview/process',
-      backendBaseUrl: 'http://3.72.108.86:8080',
+      backendHttpUrl: `http://${backendHost}/interview/process`,
+      backendBaseUrl: `http://${backendHost}`,
       cognitoIdentityPoolId: 'eu-central-1:1f7604b2-8a28-44ad-b470-b4ae2b46d758',
       region: 'eu-central-1',
     };
