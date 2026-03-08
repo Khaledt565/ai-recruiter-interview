@@ -382,15 +382,19 @@ Resources:
           AllowedMethods:
             - GET
             - HEAD
-            - OPTIONS
-          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
-          OriginAccessIdentity: ''
+          CachedMethods:
+            - GET
+            - HEAD
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
           TargetOriginId: S3Origin
+          Compress: true
         Origins:
           - Id: S3Origin
             DomainName: !GetAtt FrontendBucket.RegionalDomainName
-            S3OriginConfig:
-              OriginAccessIdentity: ''
+            S3OriginConfig: {}
         PriceClass: PriceClass_100
         CustomErrorResponses:
           - ErrorCode: 403
@@ -399,9 +403,6 @@ Resources:
           - ErrorCode: 404
             ResponseCode: 200
             ResponsePagePath: /index.html
-        Tags:
-          - Key: Environment
-            Value: !Ref EnvironmentName
 
 # ===================================
 # Outputs
