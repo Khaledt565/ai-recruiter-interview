@@ -23,8 +23,10 @@ cert.validity.notBefore = new Date();
 cert.validity.notAfter = new Date();
 cert.validity.notAfter.setFullYear(cert.validity.notAfter.getFullYear() + 1);
 
+const TARGET_IP = process.env.TARGET_IP || '63.179.254.69';
+
 const attrs = [
-  { name: 'commonName', value: '3.73.83.209' },
+  { name: 'commonName', value: TARGET_IP },
   { name: 'organizationName', value: 'AI Recruiter' },
   { name: 'countryName', value: 'US' },
 ];
@@ -52,8 +54,8 @@ cert.setExtensions([
   {
     name: 'subjectAltName',
     altNames: [
-      { type: 2, value: '3.73.83.209' },
-      { type: 7, ip: '3.73.83.209' },
+      { type: 2, value: TARGET_IP },
+      { type: 7, ip: TARGET_IP },
     ],
   },
 ]);
@@ -69,6 +71,6 @@ const keyPem = forge.pki.privateKeyToPem(pem.privateKey);
 fs.writeFileSync(path.join(certDir, 'server.crt'), certPem);
 fs.writeFileSync(path.join(certDir, 'server.key'), keyPem);
 
-console.log('✓ SSL certificates generated for IP: 3.73.83.209');
+console.log(`✓ SSL certificates generated for IP: ${TARGET_IP}`);
 console.log(`  - Certificate: ${path.join(certDir, 'server.crt')}`);
 console.log(`  - Key: ${path.join(certDir, 'server.key')}`);
