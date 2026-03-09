@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recruiter Login — AI Interviewer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .logo h1 {
+            font-size: 26px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo p {
+            color: #6c757d;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            background: #f0f0f0;
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 28px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            background: transparent;
+            border-radius: 7px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            color: #6c757d;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            background: white;
+            color: #667eea;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+        }
+
+        /* Form */
+        .panel { display: none; }
+        .panel.active { display: block; }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 6px;
+        }
+
+        input {
+            width: 100%;
+            padding: 11px 14px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: border-color 0.2s;
+            margin-bottom: 16px;
+            color: #343a40;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button[type="submit"] {
+            width: 100%;
+            padding: 13px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            margin-top: 4px;
+        }
+
+        button[type="submit"]:disabled { opacity: 0.6; cursor: default; }
+        button[type="submit"]:not(:disabled):hover { opacity: 0.9; }
+
+        .message {
+            margin-top: 14px;
+            padding: 10px 14px;
+            border-radius: 7px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .message.error { background: #f8d7da; color: #721c24; display: block; }
+        .message.success { background: #d4edda; color: #155724; display: block; }
+        .message.info { background: #d1ecf1; color: #0c5460; display: block; }
+
+        /* Confirm panel */
+        #confirmPanel .hint {
+            color: #6c757d;
+            font-size: 13px;
+            margin-bottom: 18px;
+            line-height: 1.5;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 14px;
+            font-size: 13px;
+            color: #667eea;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="logo">
+            <h1>🎯 AI Interviewer</h1>
+            <p>Recruiter Portal</p>
+        </div>
+
+        <!-- Login / Register tabs -->
+        <div class="tabs" id="mainTabs">
+            <button class="tab-btn active" onclick="switchTab('login')">Sign In</button>
+            <button class="tab-btn" onclick="switchTab('register')">Register</button>
+        </div>
+
+        <!-- Login panel -->
+        <div class="panel active" id="loginPanel">
+            <form id="loginForm">
+                <label for="loginEmail">Email address</label>
+                <input type="email" id="loginEmail" placeholder="recruiter@company.com" required autocomplete="email">
+
+                <label for="loginPassword">Password</label>
+                <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password">
+
+                <button type="submit" id="loginBtn">Sign In</button>
+            </form>
+            <div class="message" id="loginMsg"></div>
+        </div>
+
+        <!-- Register panel -->
+        <div class="panel" id="registerPanel">
+            <form id="registerForm">
+                <label for="regEmail">Email address</label>
+                <input type="email" id="regEmail" placeholder="recruiter@company.com" required autocomplete="email">
+
+                <label for="regPassword">Password <span style="font-weight:400;color:#6c757d;">(min 8 characters)</span></label>
+                <input type="password" id="regPassword" placeholder="••••••••" required autocomplete="new-password">
+
+                <label for="regPasswordConfirm">Confirm password</label>
+                <input type="password" id="regPasswordConfirm" placeholder="••••••••" required autocomplete="new-password">
+
+                <button type="submit" id="registerBtn">Create Account</button>
+            </form>
+            <div class="message" id="registerMsg"></div>
+        </div>
+
+        <!-- Email confirmation panel (shown after register) -->
+        <div class="panel" id="confirmPanel">
+            <p class="hint">We sent a 6-digit verification code to <strong id="confirmEmailDisplay"></strong>. Enter it below to activate your account.</p>
+            <form id="confirmForm">
+                <label for="confirmCode">Verification code</label>
+                <input type="text" id="confirmCode" placeholder="123456" maxlength="6" pattern="\d{6}" inputmode="numeric" required autocomplete="one-time-code">
+                <button type="submit" id="confirmBtn">Verify Email</button>
+            </form>
+            <div class="message" id="confirmMsg"></div>
+            <button class="back-link" onclick="backToRegister()">← Use a different email</button>
+        </div>
+    </div>
+
+    <script>
+        const COGNITO_REGION = 'eu-central-1';
+        const CLIENT_ID = '5mcsmb25e0465ul5lefunrfuag';
+        const COGNITO_URL = `https://cognito-idp.${COGNITO_REGION}.amazonaws.com/`;
+
+        let pendingEmail = '';
+
+        // If already logged in redirect immediately
+        (function checkExistingSession() {
+            const token = localStorage.getItem('recruiter_id_token');
+            const expiry = localStorage.getItem('recruiter_token_expiry');
+            if (token && expiry && Date.now() < parseInt(expiry, 10)) {
+                window.location.replace('recruiter.html');
+            }
+        })();
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', (tab === 'login' && i === 0) || (tab === 'register' && i === 1)));
+            document.getElementById('loginPanel').classList.toggle('active', tab === 'login');
+            document.getElementById('registerPanel').classList.toggle('active', tab === 'register');
+            document.getElementById('confirmPanel').classList.remove('active');
+            document.getElementById('mainTabs').style.display = '';
+        }
+
+        function showConfirmPanel(email) {
+            pendingEmail = email;
+            document.getElementById('confirmEmailDisplay').textContent = email;
+            document.getElementById('loginPanel').classList.remove('active');
+            document.getElementById('registerPanel').classList.remove('active');
+            document.getElementById('mainTabs').style.display = 'none';
+            document.getElementById('confirmPanel').classList.add('active');
+        }
+
+        function backToRegister() {
+            document.getElementById('mainTabs').style.display = '';
+            switchTab('register');
+        }
+
+        function showMsg(id, text, type) {
+            const el = document.getElementById(id);
+            el.textContent = text;
+            el.className = `message ${type}`;
+        }
+
+        async function cognitoRequest(target, body) {
+            const res = await fetch(COGNITO_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-amz-json-1.1',
+                    'X-Amz-Target': `AWSCognitoIdentityProviderService.${target}`,
+                },
+                body: JSON.stringify(body),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || data.__type || 'Request failed');
+            return data;
+        }
+
+        // ── Login ──────────────────────────────────────────────────────────────
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('loginBtn');
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            btn.disabled = true;
+            btn.textContent = 'Signing in…';
+            try {
+                const data = await cognitoRequest('InitiateAuth', {
+                    AuthFlow: 'USER_PASSWORD_AUTH',
+                    ClientId: CLIENT_ID,
+                    AuthParameters: { USERNAME: email, PASSWORD: password },
+                });
+                const tokens = data.AuthenticationResult;
+                const expiresIn = (tokens.ExpiresIn || 3600) * 1000;
+                localStorage.setItem('recruiter_id_token', tokens.IdToken);
+                localStorage.setItem('recruiter_access_token', tokens.AccessToken);
+                localStorage.setItem('recruiter_refresh_token', tokens.RefreshToken);
+                localStorage.setItem('recruiter_token_expiry', String(Date.now() + expiresIn));
+                localStorage.setItem('recruiter_email', email);
+                window.location.replace('recruiter.html');
+            } catch (err) {
+                if (err.message && err.message.includes('not confirmed')) {
+                    showConfirmPanel(email);
+                } else {
+                    showMsg('loginMsg', '❌ ' + err.message, 'error');
+                }
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Sign In';
+            }
+        });
+
+        // ── Register ───────────────────────────────────────────────────────────
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('registerBtn');
+            const email = document.getElementById('regEmail').value.trim();
+            const pass = document.getElementById('regPassword').value;
+            const passConfirm = document.getElementById('regPasswordConfirm').value;
+            if (pass !== passConfirm) {
+                showMsg('registerMsg', '❌ Passwords do not match.', 'error');
+                return;
+            }
+            btn.disabled = true;
+            btn.textContent = 'Creating account…';
+            try {
+                await cognitoRequest('SignUp', {
+                    ClientId: CLIENT_ID,
+                    Username: email,
+                    Password: pass,
+                    UserAttributes: [{ Name: 'email', Value: email }],
+                });
+                showConfirmPanel(email);
+            } catch (err) {
+                if (err.message && err.message.includes('already exists')) {
+                    showMsg('registerMsg', '❌ An account with this email already exists. Try signing in.', 'error');
+                } else {
+                    showMsg('registerMsg', '❌ ' + err.message, 'error');
+                }
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Create Account';
+            }
+        });
+
+        // ── Confirm ────────────────────────────────────────────────────────────
+        document.getElementById('confirmForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('confirmBtn');
+            const code = document.getElementById('confirmCode').value.trim();
+            btn.disabled = true;
+            btn.textContent = 'Verifying…';
+            try {
+                await cognitoRequest('ConfirmSignUp', {
+                    ClientId: CLIENT_ID,
+                    Username: pendingEmail,
+                    ConfirmationCode: code,
+                });
+                showMsg('confirmMsg', '✅ Email verified! Signing you in…', 'success');
+                // Auto sign-in after confirmation — switch to login with pre-filled email
+                setTimeout(() => {
+                    document.getElementById('loginEmail').value = pendingEmail;
+                    showMsg('loginMsg', '✅ Account confirmed! Enter your password to continue.', 'success');
+                    switchTab('login');
+                    document.getElementById('mainTabs').style.display = '';
+                }, 1200);
+            } catch (err) {
+                showMsg('confirmMsg', '❌ ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Verify Email';
+            }
+        });
+    </script>
+</body>
+</html>

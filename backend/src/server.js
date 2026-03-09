@@ -15,6 +15,8 @@ import { processTranscript, QUESTIONS, generateCandidateSummary } from './interv
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
+import jwt from 'jsonwebtoken';
+import jwksClient from 'jwks-rsa';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -22,6 +24,7 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 const REGION = process.env.AWS_REGION || 'eu-central-1';
 const SESSION_TABLE = process.env.SESSION_TABLE || 'InterviewSessions';
+const COGNITO_USER_POOL_ID = process.env.COGNITO_USER_POOL_ID || 'eu-central-1_JbO8lhpi2';
 
 const polly = new PollyClient({ region: REGION });
 const s3 = new S3Client({ region: REGION });
@@ -29,6 +32,32 @@ const ses = new SESClient({ region: REGION });
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }));
 
 const SES_FROM_EMAIL = process.env.SES_FROM_EMAIL || '';
+
+// JWT verification using Cognito JWKS
+const jwks = jwksClient({
+  jwksUri: `https://cognito-idp.${REGION}.amazonaws.com/${COGNITO_USER_POOL_ID}/.well-known/jwks.json`,
+  cache: true,
+  cacheMaxEntries: 5,
+  cacheMaxAge: 10 * 60 * 1000, // 10 min
+});
+
+function getSigningKey(header, callback) {
+  jwks.getSigningKey(header.kid, (err, key) => {
+    if (err) return callback(err);
+    callback(null, key.getPublicKey());
+  });
+}
+
+function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return res.status(401).json({ error: 'Authentication required' });
+  jwt.verify(token, getSigningKey, { algorithms: ['RS256'] }, (err, decoded) => {
+    if (err) return res.status(401).json({ error: 'Invalid or expired token' });
+    req.recruiterEmail = decoded.email || decoded['cognito:username'];
+    next();
+  });
+}
 
 app.use(cors());
 app.use(express.json());
@@ -175,7 +204,7 @@ app.get('/health', (req, res) => {
 });
 
 // NEW: Create interview link
-app.post('/interview/create', async (req, res) => {
+app.post('/interview/create', requireAuth, async (req, res) => {
   try {
     const { candidateName, candidateEmail, recruiterEmail, jobDescription } = req.body;
 
@@ -264,7 +293,7 @@ app.get('/interview/validate/:interviewId', async (req, res) => {
 });
 
 // List interview sessions for a recruiter
-app.get('/interview/sessions', async (req, res) => {
+app.get('/interview/sessions', requireAuth, async (req, res) => {
   try {
     const { recruiterEmail } = req.query;
     if (!recruiterEmail || typeof recruiterEmail !== 'string') {

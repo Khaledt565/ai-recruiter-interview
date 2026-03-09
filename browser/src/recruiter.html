@@ -240,6 +240,34 @@
         .rec-yes { color: #0c5460; font-weight: 600; }
         .rec-maybe { color: #856404; font-weight: 600; }
         .rec-no { color: #721c24; font-weight: 600; }
+
+        .auth-bar {
+            background: white;
+            border-radius: 12px;
+            padding: 12px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+            font-size: 14px;
+        }
+
+        .auth-bar span { color: #495057; }
+        .auth-bar strong { color: #343a40; }
+
+        .logout-btn {
+            background: none;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            color: #6c757d;
+            transition: all 0.15s;
+        }
+
+        .logout-btn:hover { border-color: #dc3545; color: #dc3545; }
     </style>
 </head>
 <body>
@@ -327,6 +355,42 @@
     </div>
 
     <script>
+        // ── Auth guard ─────────────────────────────────────────────────────────
+        const _token = localStorage.getItem('recruiter_id_token');
+        const _expiry = localStorage.getItem('recruiter_token_expiry');
+        if (!_token || !_expiry || Date.now() >= parseInt(_expiry, 10)) {
+            localStorage.removeItem('recruiter_id_token');
+            window.location.replace('recruiter-login.html');
+        }
+
+        const recruiterEmail = localStorage.getItem('recruiter_email') || '';
+
+        // Inject auth bar
+        (function renderAuthBar() {
+            const bar = document.createElement('div');
+            bar.className = 'auth-bar';
+            bar.innerHTML = `<span>Signed in as <strong>${recruiterEmail}</strong></span><button class="logout-btn" onclick="signOut()">Sign out</button>`;
+            document.querySelector('.container').insertAdjacentElement('afterbegin', bar);
+        })();
+
+        // Pre-fill recruiter email fields
+        (function prefillEmail() {
+            const f = document.getElementById('recruiterEmail');
+            const s = document.getElementById('sessionsEmail');
+            if (f) f.value = recruiterEmail;
+            if (s) s.value = recruiterEmail;
+        })();
+
+        function signOut() {
+            ['recruiter_id_token','recruiter_access_token','recruiter_refresh_token','recruiter_token_expiry','recruiter_email']
+                .forEach(k => localStorage.removeItem(k));
+            window.location.replace('recruiter-login.html');
+        }
+
+        function authHeaders() {
+            return { 'Authorization': 'Bearer ' + localStorage.getItem('recruiter_id_token') };
+        }
+
         // Dynamic backend URL - localhost for local testing, API Gateway for production via CloudFront
         const backendHost = window.location.hostname === 'localhost' 
             ? 'localhost:8080' 
@@ -359,7 +423,7 @@
             try {
                 const response = await fetch(`${BACKEND_URL}/interview/create`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', ...authHeaders() },
                     body: JSON.stringify(data),
                 });
                 
@@ -412,7 +476,7 @@
             loadBtn.disabled = true;
             loadBtn.textContent = 'Loading...';
             try {
-                const res = await fetch(`${BACKEND_URL}/interview/sessions?recruiterEmail=${encodeURIComponent(email)}`);
+                const res = await fetch(`${BACKEND_URL}/interview/sessions?recruiterEmail=${encodeURIComponent(email)}`, { headers: authHeaders() });
                 if (!res.ok) throw new Error('Failed to load sessions');
                 const data = await res.json();
                 const sessions = data.sessions || [];

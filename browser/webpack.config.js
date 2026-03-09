@@ -32,6 +32,11 @@ module.exports = {
       filename: 'recruiter.html',
       chunks: [], // Don't inject bundle.js - recruiter.html has its own inline script
     }),
+    new HtmlWebpackPlugin({
+      template: './src/recruiter-login.html',
+      filename: 'recruiter-login.html',
+      chunks: [], // Standalone page with inline script
+    }),
     new webpack.ProvidePlugin({
       Buffer: ['buffer', 'Buffer'],
       process: 'process/browser',
