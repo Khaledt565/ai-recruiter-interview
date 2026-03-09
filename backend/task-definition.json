@@ -2,14 +2,14 @@
   "family": "ai-recruiter-interview",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
-  "cpu": "512",
-  "memory": "1024",
+  "cpu": "256",
+  "memory": "512",
   "executionRoleArn": "arn:aws:iam::090605004529:role/ecsTaskExecutionRole",
   "taskRoleArn": "arn:aws:iam::090605004529:role/ecsTaskRole",
   "containerDefinitions": [
     {
-      "name": "interview-server",
-      "image": "090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-interview:latest",
+      "name": "ai-recruiter-interview",
+      "image": "090605004529.dkr.ecr.eu-central-1.amazonaws.com/ai-recruiter-backend:latest",
       "portMappings": [
         {
           "containerPort": 8080,
@@ -26,8 +26,8 @@
           "value": "InterviewSessions"
         },
         {
-          "name": "BEDROCK_MODEL_ID",
-          "value": "anthropic.claude-3-haiku-20240307-v1:0"
+          "name": "USE_HTTPS",
+          "value": "false"
         }
       ],
       "logConfiguration": {
