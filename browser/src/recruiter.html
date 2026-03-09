@@ -199,8 +199,8 @@
         const backendHost = window.location.hostname === 'localhost' 
             ? 'localhost:8080' 
             : '3.68.77.52:8080';
-        // HTTPS for production, HTTP for local
-        const backendProtocol = window.location.hostname === 'localhost' ? 'http' : 'https';
+        // Use HTTP for backend (internal AWS communication)
+        const backendProtocol = 'http';
         const BACKEND_URL = `${backendProtocol}://${backendHost}`;
         let generatedLink = '';
 

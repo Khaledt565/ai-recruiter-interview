@@ -18,8 +18,8 @@ class InterviewApp {
       ? 'localhost:8080' 
       : '3.68.77.52:8080';
     
-    // HTTPS for production, HTTP for local
-    const backendProtocol = window.location.hostname === 'localhost' ? 'http' : 'https';
+    // Use HTTP for backend (internal AWS communication)
+    const backendProtocol = 'http';
     
     this.config = {
       backendHttpUrl: `${backendProtocol}://${backendHost}/interview/process`,  // ✅ CORRECT!
