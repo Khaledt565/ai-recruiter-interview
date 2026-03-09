@@ -8,9 +8,10 @@ import path from 'path';
 import { WebSocketServer } from 'ws';
 import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { processTranscript, QUESTIONS } from './interview-engine.js';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { processTranscript, QUESTIONS, generateCandidateSummary } from './interview-engine.js';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
@@ -24,7 +25,10 @@ const SESSION_TABLE = process.env.SESSION_TABLE || 'InterviewSessions';
 
 const polly = new PollyClient({ region: REGION });
 const s3 = new S3Client({ region: REGION });
+const ses = new SESClient({ region: REGION });
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }));
+
+const SES_FROM_EMAIL = process.env.SES_FROM_EMAIL || '';
 
 app.use(cors());
 app.use(express.json());
@@ -32,19 +36,27 @@ app.use(express.json());
 // Save full interview conversation to S3 (called on completion, disconnection, or explicit end)
 async function saveInterviewSnapshot(meetingId, attendeeId, status) {
   try {
-    // Load engine state (has conversation history)
-    const stateRes = await ddb.send(new GetCommand({
-      TableName: SESSION_TABLE,
-      Key: { pk: `MEETING#${meetingId}`, sk: `ATTENDEE#${attendeeId}` },
-    }));
+    const [stateRes, metaRes] = await Promise.all([
+      ddb.send(new GetCommand({ TableName: SESSION_TABLE, Key: { pk: `MEETING#${meetingId}`, sk: `ATTENDEE#${attendeeId}` } })),
+      ddb.send(new GetCommand({ TableName: SESSION_TABLE, Key: { pk: `INTERVIEW#${meetingId}`, sk: `META` } })),
+    ]);
     const state = stateRes.Item || {};
-
-    // Load interview metadata (has candidateName, emails, etc.)
-    const metaRes = await ddb.send(new GetCommand({
-      TableName: SESSION_TABLE,
-      Key: { pk: `INTERVIEW#${meetingId}`, sk: `META` },
-    }));
     const meta = metaRes.Item || {};
+
+    // Generate AI summary only for completed interviews with conversation history
+    let aiSummary = null;
+    if (status === 'completed' && state.history && state.history.length > 0) {
+      try {
+        aiSummary = await generateCandidateSummary(
+          state.history,
+          meta.candidateName || 'Unknown',
+          state.jobDescription || meta.jobDescription || null,
+        );
+        console.log(`✅ AI summary generated for ${meetingId}: ${aiSummary?.recommendation} (${aiSummary?.score}/10)`);
+      } catch (err) {
+        console.error('❌ Failed to generate AI summary:', err);
+      }
+    }
 
     const snapshot = {
       interviewId: meetingId,
@@ -56,8 +68,10 @@ async function saveInterviewSnapshot(meetingId, attendeeId, status) {
       startedAt: state.startedAt || null,
       createdAt: meta.createdAt || null,
       questionsAnswered: state.qIndex || 0,
-      totalQuestions: QUESTIONS.length,
+      totalQuestions: (state.questions || QUESTIONS).length,
       completed: state.done || false,
+      jobDescription: state.jobDescription || meta.jobDescription || null,
+      aiSummary,
       conversation: (state.history || []).map((h, i) => ({
         turn: i + 1,
         question: h.q,
@@ -75,21 +89,69 @@ async function saveInterviewSnapshot(meetingId, attendeeId, status) {
       ServerSideEncryption: 'AES256',
     }));
 
-    // Update interview status in DynamoDB without overwriting existing fields
+    // Build DynamoDB update expression — optionally store AI summary fields
+    let updateExpr = 'SET #st = :status, updatedAt = :now';
+    const exprNames = { '#st': 'status' };
+    const exprValues = { ':status': status, ':now': new Date().toISOString() };
+    if (aiSummary) {
+      updateExpr += ', aiScore = :score, aiRecommendation = :rec, aiSummary = :summary';
+      exprValues[':score'] = aiSummary.score;
+      exprValues[':rec'] = aiSummary.recommendation;
+      exprValues[':summary'] = aiSummary.summary;
+    }
+
     await ddb.send(new UpdateCommand({
       TableName: SESSION_TABLE,
       Key: { pk: `INTERVIEW#${meetingId}`, sk: `META` },
-      UpdateExpression: 'SET #st = :status, updatedAt = :now',
-      ExpressionAttributeNames: { '#st': 'status' },
-      ExpressionAttributeValues: {
-        ':status': status,
-        ':now': new Date().toISOString(),
-      },
+      UpdateExpression: updateExpr,
+      ExpressionAttributeNames: exprNames,
+      ExpressionAttributeValues: exprValues,
     }));
+
+    // Notify recruiter by email when interview completes
+    if (status === 'completed' && meta.recruiterEmail && SES_FROM_EMAIL) {
+      await sendRecruiterEmail(meta.recruiterEmail, meta.candidateName, aiSummary, meetingId);
+    }
 
     console.log(`✅ Interview snapshot saved (${meetingId}, status: ${status}, turns: ${snapshot.conversation.length})`);
   } catch (err) {
     console.error('❌ Failed to save interview snapshot:', err);
+  }
+}
+
+async function sendRecruiterEmail(recruiterEmail, candidateName, summary, interviewId) {
+  try {
+    const rec = summary?.recommendation || 'N/A';
+    const score = summary?.score != null ? `${summary.score}/10` : 'N/A';
+    const summaryText = summary?.summary || 'No summary available.';
+    const strengths = (summary?.strengths || []).map(s => `  • ${s}`).join('\n');
+    const concerns = (summary?.concerns || []).map(c => `  • ${c}`).join('\n');
+
+    const bodyLines = [
+      `Interview completed: ${candidateName}`,
+      `Interview ID: ${interviewId}`,
+      ``,
+      `Recommendation: ${rec}`,
+      `Score: ${score}`,
+      ``,
+      `Summary:`,
+      summaryText,
+    ];
+    if (strengths) bodyLines.push(``, `Strengths:`, strengths);
+    if (concerns) bodyLines.push(``, `Concerns:`, concerns);
+    bodyLines.push(``, `View full transcript in your recruiter dashboard.`);
+
+    await ses.send(new SendEmailCommand({
+      Source: SES_FROM_EMAIL,
+      Destination: { ToAddresses: [recruiterEmail] },
+      Message: {
+        Subject: { Data: `Interview Complete: ${candidateName} — ${rec}` },
+        Body: { Text: { Data: bodyLines.join('\n') } },
+      },
+    }));
+    console.log(`✅ Recruiter email sent to ${recruiterEmail}`);
+  } catch (err) {
+    console.error('❌ Failed to send recruiter email (non-fatal):', err.message);
   }
 }
 
@@ -115,7 +177,7 @@ app.get('/health', (req, res) => {
 // NEW: Create interview link
 app.post('/interview/create', async (req, res) => {
   try {
-    const { candidateName, candidateEmail, recruiterEmail } = req.body;
+    const { candidateName, candidateEmail, recruiterEmail, jobDescription } = req.body;
 
     if (!candidateName || !candidateEmail || !recruiterEmail) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -135,6 +197,7 @@ app.post('/interview/create', async (req, res) => {
           candidateName,
           candidateEmail,
           recruiterEmail,
+          jobDescription: jobDescription || null,
           status: 'created',
           createdAt: new Date().toISOString(),
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -192,10 +255,43 @@ app.get('/interview/validate/:interviewId', async (req, res) => {
       candidateName: result.Item.candidateName,
       attendeeId: result.Item.attendeeId,
       interviewId: result.Item.interviewId,
+      jobDescription: result.Item.jobDescription || null,
     });
   } catch (error) {
     console.error('Error validating interview:', error);
     res.status(500).json({ error: 'Failed to validate interview' });
+  }
+});
+
+// List interview sessions for a recruiter
+app.get('/interview/sessions', async (req, res) => {
+  try {
+    const { recruiterEmail } = req.query;
+    if (!recruiterEmail || typeof recruiterEmail !== 'string') {
+      return res.status(400).json({ error: 'recruiterEmail query param is required' });
+    }
+    const result = await ddb.send(new ScanCommand({
+      TableName: SESSION_TABLE,
+      FilterExpression: 'recruiterEmail = :email AND sk = :meta',
+      ExpressionAttributeValues: { ':email': recruiterEmail, ':meta': 'META' },
+    }));
+    const sessions = (result.Items || [])
+      .filter(item => item.pk && item.pk.startsWith('INTERVIEW#'))
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+      .map(item => ({
+        interviewId: item.interviewId,
+        candidateName: item.candidateName,
+        candidateEmail: item.candidateEmail,
+        status: item.status,
+        createdAt: item.createdAt,
+        score: item.aiScore || null,
+        recommendation: item.aiRecommendation || null,
+        summary: item.aiSummary || null,
+      }));
+    res.json({ sessions });
+  } catch (error) {
+    console.error('Error listing sessions:', error);
+    res.status(500).json({ error: 'Failed to list sessions' });
   }
 });
 
@@ -298,11 +394,30 @@ wss.on('connection', (ws, req) => {
 
       // Handle initialization
       if (data.type === 'init') {
+        const mid = meetingId || data.meetingId;
+        const aid = attendeeId || data.attendeeId;
+
+        // Load job description and candidate name from interview metadata
+        let jobDescription = null;
+        let candidateName = null;
+        try {
+          const metaRes = await ddb.send(new GetCommand({
+            TableName: SESSION_TABLE,
+            Key: { pk: `INTERVIEW#${mid}`, sk: 'META' },
+          }));
+          jobDescription = metaRes.Item?.jobDescription || null;
+          candidateName = metaRes.Item?.candidateName || null;
+        } catch (err) {
+          console.error('Could not load interview metadata for init:', err);
+        }
+
         const result = await processTranscript({
-          meetingId: meetingId || data.meetingId,
-          attendeeId: attendeeId || data.attendeeId,
+          meetingId: mid,
+          attendeeId: aid,
           transcriptText: '',
           isInit: true,
+          jobDescription,
+          candidateName,
         });
 
         // Generate audio

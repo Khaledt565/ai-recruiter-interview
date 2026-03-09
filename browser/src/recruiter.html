@@ -142,6 +142,104 @@
         .error.show {
             display: block;
         }
+
+        textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+            color: #343a40;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .sessions-section {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+            margin-top: 20px;
+        }
+
+        .sessions-section h2 {
+            margin-bottom: 20px;
+            color: #343a40;
+            font-size: 20px;
+        }
+
+        .sessions-load-row {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            margin-bottom: 15px;
+        }
+
+        .sessions-load-row > div {
+            flex: 1;
+        }
+
+        .sessions-load-row label {
+            margin-bottom: 5px;
+            display: block;
+        }
+
+        .sessions-load-row input {
+            margin-bottom: 0;
+        }
+
+        .sessions-load-row button {
+            margin-bottom: 0;
+            padding: 12px 20px;
+            white-space: nowrap;
+        }
+
+        .sessions-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .sessions-table th {
+            background: #f8f9fa;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .sessions-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0f0f0;
+            color: #343a40;
+            vertical-align: middle;
+        }
+
+        .sessions-table tr:hover td { background: #f8f9fa; cursor: default; }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-completed { background: #d4edda; color: #155724; }
+        .badge-created { background: #d1ecf1; color: #0c5460; }
+        .badge-ended { background: #fff3cd; color: #856404; }
+        .badge-disconnected { background: #f8d7da; color: #721c24; }
+        .rec-strong-yes { color: #155724; font-weight: 600; }
+        .rec-yes { color: #0c5460; font-weight: 600; }
+        .rec-maybe { color: #856404; font-weight: 600; }
+        .rec-no { color: #721c24; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -173,6 +271,13 @@
                 placeholder="recruiter@company.com"
                 required
             >
+
+            <label for="jobDescription">Job Description <span style="font-weight:400;color:#6c757d;">(optional — enables AI-tailored questions)</span></label>
+            <textarea
+                id="jobDescription"
+                placeholder="Paste the job description here to generate role-specific interview questions..."
+                rows="4"
+            ></textarea>
             
             <button type="submit" id="submitBtn">
                 Generate Interview Link
@@ -191,6 +296,33 @@
                 🔒 Can only be used once<br>
                 👤 Personalized for: <span id="candidateNameDisplay"></span>
             </p>
+        </div>
+
+        <div class="sessions-section">
+            <h2>📋 Past Interviews</h2>
+            <div class="sessions-load-row">
+                <div>
+                    <label for="sessionsEmail">Your Recruiter Email</label>
+                    <input type="email" id="sessionsEmail" placeholder="recruiter@company.com">
+                </div>
+                <button onclick="loadSessions()" id="loadBtn">Load Sessions</button>
+            </div>
+            <div class="error" id="sessionsError"></div>
+            <div id="sessionsContainer" style="display:none;">
+                <p id="sessionsCount" style="color:#6c757d;font-size:14px;margin-bottom:10px;"></p>
+                <table class="sessions-table">
+                    <thead>
+                        <tr>
+                            <th>Candidate</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Score</th>
+                            <th>Recommendation</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sessionsBody"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -221,6 +353,7 @@
                 candidateName: document.getElementById('candidateName').value,
                 candidateEmail: document.getElementById('candidateEmail').value,
                 recruiterEmail: document.getElementById('recruiterEmail').value,
+                jobDescription: document.getElementById('jobDescription').value.trim() || undefined,
             };
             
             try {
@@ -242,6 +375,8 @@
                 document.getElementById('candidateNameDisplay').textContent = data.candidateName;
                 resultDiv.classList.add('show');
                 
+                // Pre-fill recruiter email in the sessions panel
+                document.getElementById('sessionsEmail').value = data.recruiterEmail;
                 document.getElementById('createForm').reset();
                 
                 console.log('Interview link created:', result);
@@ -256,6 +391,85 @@
             }
         });
         
+        async function loadSessions() {
+            const emailInput = document.getElementById('sessionsEmail');
+            const loadBtn = document.getElementById('loadBtn');
+            const errDiv = document.getElementById('sessionsError');
+            const container = document.getElementById('sessionsContainer');
+            const tbody = document.getElementById('sessionsBody');
+            const count = document.getElementById('sessionsCount');
+
+            errDiv.classList.remove('show');
+            container.style.display = 'none';
+
+            const email = emailInput.value.trim();
+            if (!email) {
+                errDiv.textContent = '❌ Please enter your recruiter email.';
+                errDiv.classList.add('show');
+                return;
+            }
+
+            loadBtn.disabled = true;
+            loadBtn.textContent = 'Loading...';
+            try {
+                const res = await fetch(`${BACKEND_URL}/interview/sessions?recruiterEmail=${encodeURIComponent(email)}`);
+                if (!res.ok) throw new Error('Failed to load sessions');
+                const data = await res.json();
+                const sessions = data.sessions || [];
+
+                count.textContent = `${sessions.length} interview${sessions.length !== 1 ? 's' : ''} found`;
+                tbody.innerHTML = '';
+
+                if (sessions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#6c757d;padding:20px;">No interviews found for this email.</td></tr>';
+                } else {
+                    sessions.forEach(s => {
+                        const date = s.createdAt
+                            ? new Date(s.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                            : '—';
+                        const recClass = getRecClass(s.recommendation);
+                        const score = s.score != null ? `${s.score}/10` : '—';
+                        const rec = s.recommendation || '—';
+                        const titleAttr = s.summary ? ` title="${escapeHtml(s.summary)}"` : '';
+                        tbody.innerHTML += `<tr${titleAttr}>
+                            <td><strong>${escapeHtml(s.candidateName || '—')}</strong><br><span style="color:#6c757d;font-size:12px;">${escapeHtml(s.candidateEmail || '')}</span></td>
+                            <td>${getStatusBadge(s.status || 'unknown')}</td>
+                            <td>${date}</td>
+                            <td style="text-align:center;">${score}</td>
+                            <td class="${recClass}">${rec}</td>
+                        </tr>`;
+                    });
+                }
+                container.style.display = 'block';
+            } catch (err) {
+                errDiv.textContent = `❌ Error: ${err.message}`;
+                errDiv.classList.add('show');
+            } finally {
+                loadBtn.disabled = false;
+                loadBtn.textContent = 'Load Sessions';
+            }
+        }
+
+        function getStatusBadge(status) {
+            if (status === 'completed') return '<span class="badge badge-completed">Completed</span>';
+            if (status === 'created') return '<span class="badge badge-created">Not Started</span>';
+            if (status && status.includes('ended')) return '<span class="badge badge-ended">Ended Early</span>';
+            if (status === 'disconnected') return '<span class="badge badge-disconnected">Disconnected</span>';
+            return `<span class="badge" style="background:#e9ecef;color:#495057;">${escapeHtml(status)}</span>`;
+        }
+
+        function getRecClass(rec) {
+            if (rec === 'Strong Yes') return 'rec-strong-yes';
+            if (rec === 'Yes') return 'rec-yes';
+            if (rec === 'Maybe') return 'rec-maybe';
+            if (rec === 'No') return 'rec-no';
+            return '';
+        }
+
+        function escapeHtml(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
         function copyLink() {
             if (!generatedLink) {
                 alert('No link to copy!');
