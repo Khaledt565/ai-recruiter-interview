@@ -43,8 +43,8 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'healthy', 
     timestamp: new Date().toISOString(),
-    version: '1.3.0',
-    message: 'GitHub Actions deployment - YAML fixed'
+    version: '2.0.0',
+    message: 'GitHub Actions deployment - credentials corrected'
   });
 });
 
