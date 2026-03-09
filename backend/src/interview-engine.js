@@ -108,6 +108,8 @@ export async function processTranscript({ meetingId, attendeeId, transcriptText,
     state.started = true;
     state.qIndex = 0;
     state.done = false;
+    state.history = [];
+    state.startedAt = new Date().toISOString();
     await saveState(meetingId, attendeeId, state);
     return { spokenText: QUESTIONS[0], done: false, qIndex: 0 };
   }
@@ -146,6 +148,13 @@ export async function processTranscript({ meetingId, attendeeId, transcriptText,
   // Check if done
   if (state.qIndex >= QUESTIONS.length) {
     state.done = true;
+    state.history = state.history || [];
+    state.history.push({
+      q: currentQuestion,
+      a: transcriptText,
+      reply: CLOSING,
+      t: new Date().toISOString(),
+    });
     await saveState(meetingId, attendeeId, state);
     return { spokenText: CLOSING, done: true, qIndex: state.qIndex };
   }
@@ -159,6 +168,15 @@ export async function processTranscript({ meetingId, attendeeId, transcriptText,
   } else if (!spoken.includes("?")) {
     spoken = `${spoken} ${currentQuestion}`.trim();
   }
+
+  // Save conversation history entry
+  state.history = state.history || [];
+  state.history.push({
+    q: currentQuestion,
+    a: transcriptText,
+    reply: spoken,
+    t: new Date().toISOString(),
+  });
 
   await saveState(meetingId, attendeeId, state);
 

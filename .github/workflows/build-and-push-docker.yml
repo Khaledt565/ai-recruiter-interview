@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths:
-      - 'backend/**'
-      - '.github/workflows/build-and-push-docker.yml'
+      - "backend/**"
+      - ".github/workflows/build-and-push-docker.yml"
 
 env:
   AWS_REGION: eu-central-1

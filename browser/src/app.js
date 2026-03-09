@@ -163,7 +163,11 @@ class InterviewApp {
       this.transcribeClient.stopTranscription();
     }
 
-    if (this.websocket) {
+    if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+      // Tell server the candidate ended the interview intentionally
+      this.websocket.send(JSON.stringify({ type: 'end' }));
+      setTimeout(() => this.websocket.close(), 500);
+    } else if (this.websocket) {
       this.websocket.close();
     }
 

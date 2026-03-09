@@ -1,10 +1,10 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AI Recruiter Interview - Complete Infrastructure'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "AI Recruiter Interview - Complete Infrastructure"
 
 Parameters:
   EnvironmentName:
     Type: String
-    Default: 'dev'
+    Default: "dev"
     AllowedValues:
       - dev
       - staging
@@ -18,7 +18,7 @@ Resources:
   InterviewSessionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub 'InterviewSessions-${EnvironmentName}'
+      TableName: !Sub "InterviewSessions-${EnvironmentName}"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: pk
@@ -40,16 +40,16 @@ Resources:
   TranscribeIdentityPool:
     Type: AWS::Cognito::IdentityPool
     Properties:
-      IdentityPoolName: !Sub 'InterviewTranscribe-${EnvironmentName}'
+      IdentityPoolName: !Sub "InterviewTranscribe-${EnvironmentName}"
       AllowUnauthenticatedIdentities: true
 
   # IAM Role for Unauthenticated Cognito Users
   CognitoUnauthRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'Cognito_InterviewTranscribe_Unauth_Role-${EnvironmentName}'
+      RoleName: !Sub "Cognito_InterviewTranscribe_Unauth_Role-${EnvironmentName}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -65,15 +65,15 @@ Resources:
   TranscribePolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      ManagedPolicyName: !Sub 'TranscribeStreamingPolicy-${EnvironmentName}'
+      ManagedPolicyName: !Sub "TranscribeStreamingPolicy-${EnvironmentName}"
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Action:
               - transcribe:StartStreamTranscription
               - transcribe:StartStreamTranscriptionWebSocket
-            Resource: '*'
+            Resource: "*"
 
   # Attach Cognito Role to Identity Pool
   IdentityPoolRoleAttachment:
@@ -89,7 +89,7 @@ Resources:
   ECRRepository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: !Sub 'ai-recruiter-interview-${EnvironmentName}'
+      RepositoryName: !Sub "ai-recruiter-interview-${EnvironmentName}"
       ImageScanningConfiguration:
         ScanOnPush: true
       LifecyclePolicy:
@@ -120,7 +120,7 @@ Resources:
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Sub 'ai-recruiter-cluster-${EnvironmentName}'
+      ClusterName: !Sub "ai-recruiter-cluster-${EnvironmentName}"
       CapacityProviders:
         - FARGATE
         - FARGATE_SPOT
@@ -135,7 +135,7 @@ Resources:
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/ecs/ai-recruiter-interview-${EnvironmentName}'
+      LogGroupName: !Sub "/ecs/ai-recruiter-interview-${EnvironmentName}"
       RetentionInDays: 7
 
   # ===================================
@@ -144,9 +144,9 @@ Resources:
   ECSTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'ecsTaskExecutionRole-${EnvironmentName}'
+      RoleName: !Sub "ecsTaskExecutionRole-${EnvironmentName}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -158,9 +158,9 @@ Resources:
   ECSTaskRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'ecsTaskRole-${EnvironmentName}'
+      RoleName: !Sub "ecsTaskRole-${EnvironmentName}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -169,7 +169,7 @@ Resources:
       Policies:
         - PolicyName: TaskPermissions
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -180,11 +180,11 @@ Resources:
               - Effect: Allow
                 Action:
                   - bedrock:InvokeModel
-                Resource: '*'
+                Resource: "*"
               - Effect: Allow
                 Action:
                   - polly:SynthesizeSpeech
-                Resource: '*'
+                Resource: "*"
 
   # ===================================
   # Security Group
@@ -192,7 +192,7 @@ Resources:
   FargateSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'ai-recruiter-fargate-sg-${EnvironmentName}'
+      GroupName: !Sub "ai-recruiter-fargate-sg-${EnvironmentName}"
       GroupDescription: Security group for AI recruiter Fargate service
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -215,14 +215,14 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub 'ai-recruiter-vpc-${EnvironmentName}'
+          Value: !Sub "ai-recruiter-vpc-${EnvironmentName}"
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 'ai-recruiter-igw-${EnvironmentName}'
+          Value: !Sub "ai-recruiter-igw-${EnvironmentName}"
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -235,22 +235,22 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'ai-recruiter-public-subnet-1-${EnvironmentName}'
+          Value: !Sub "ai-recruiter-public-subnet-1-${EnvironmentName}"
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'ai-recruiter-public-subnet-2-${EnvironmentName}'
+          Value: !Sub "ai-recruiter-public-subnet-2-${EnvironmentName}"
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -258,7 +258,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'ai-recruiter-public-rt-${EnvironmentName}'
+          Value: !Sub "ai-recruiter-public-rt-${EnvironmentName}"
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -286,17 +286,17 @@ Resources:
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: !Sub 'ai-recruiter-interview-${EnvironmentName}'
+      Family: !Sub "ai-recruiter-interview-${EnvironmentName}"
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      Cpu: '512'
-      Memory: '1024'
+      Cpu: "512"
+      Memory: "1024"
       ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       TaskRoleArn: !GetAtt ECSTaskRole.Arn
       ContainerDefinitions:
         - Name: interview-server
-          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}:latest'
+          Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}:latest"
           PortMappings:
             - ContainerPort: 8080
               Protocol: tcp
@@ -320,7 +320,7 @@ Resources:
   ECSService:
     Type: AWS::ECS::Service
     Properties:
-      ServiceName: !Sub 'ai-recruiter-service-${EnvironmentName}'
+      ServiceName: !Sub "ai-recruiter-service-${EnvironmentName}"
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref TaskDefinition
       DesiredCount: 1
@@ -340,7 +340,7 @@ Resources:
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'ai-recruiter-frontend-${EnvironmentName}-${AWS::AccountId}'
+      BucketName: !Sub "ai-recruiter-frontend-${EnvironmentName}-${AWS::AccountId}"
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -360,12 +360,12 @@ Resources:
     Properties:
       Bucket: !Ref FrontendBucket
       PolicyText:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
-            Principal: '*'
-            Action: 's3:GetObject'
-            Resource: !Sub '${FrontendBucket.Arn}/*'
+            Principal: "*"
+            Action: "s3:GetObject"
+            Resource: !Sub "${FrontendBucket.Arn}/*"
 
   # ===================================
   # CloudFront Distribution
@@ -376,7 +376,7 @@ Resources:
       DistributionConfig:
         Enabled: true
         DefaultRootObject: index.html
-        Comment: !Sub 'AI Recruiter Frontend - ${EnvironmentName}'
+        Comment: !Sub "AI Recruiter Frontend - ${EnvironmentName}"
         DefaultCacheBehavior:
           ViewerProtocolPolicy: redirect-to-https
           AllowedMethods:
@@ -412,31 +412,31 @@ Outputs:
     Description: Cognito Identity Pool ID for browser app
     Value: !Ref TranscribeIdentityPool
     Export:
-      Name: !Sub '${AWS::StackName}-CognitoIdentityPoolId'
+      Name: !Sub "${AWS::StackName}-CognitoIdentityPoolId"
 
   ECRRepositoryUri:
     Description: ECR Repository URI for Docker images
     Value: !GetAtt ECRRepository.RepositoryUri
     Export:
-      Name: !Sub '${AWS::StackName}-ECRRepositoryUri'
+      Name: !Sub "${AWS::StackName}-ECRRepositoryUri"
 
   DynamoDBTableName:
     Description: DynamoDB table name
     Value: !Ref InterviewSessionsTable
     Export:
-      Name: !Sub '${AWS::StackName}-DynamoDBTableName'
+      Name: !Sub "${AWS::StackName}-DynamoDBTableName"
 
   ECSClusterName:
     Description: ECS Cluster name
     Value: !Ref ECSCluster
     Export:
-      Name: !Sub '${AWS::StackName}-ECSClusterName'
+      Name: !Sub "${AWS::StackName}-ECSClusterName"
 
   ECSServiceName:
     Description: ECS Service name
     Value: !GetAtt ECSService.Name
     Export:
-      Name: !Sub '${AWS::StackName}-ECSServiceName'
+      Name: !Sub "${AWS::StackName}-ECSServiceName"
 
   Region:
     Description: AWS Region
@@ -450,12 +450,12 @@ Outputs:
          docker build -t ai-recruiter-interview .
          docker tag ai-recruiter-interview:latest ${ECRRepository.RepositoryUri}:latest
          docker push ${ECRRepository.RepositoryUri}:latest
-      
+
       2. Update browser config with:
          - Cognito Pool ID: ${TranscribeIdentityPool}
          - Region: ${AWS::Region}
          - Backend URL: Check ECS task public IP
-      
+
       3. Force service update:
          aws ecs update-service --cluster ${ECSCluster} --service ${ECSService.Name} --force-new-deployment
 
@@ -463,16 +463,16 @@ Outputs:
     Description: S3 bucket for frontend files
     Value: !Ref FrontendBucket
     Export:
-      Name: !Sub '${AWS::StackName}-FrontendBucket'
+      Name: !Sub "${AWS::StackName}-FrontendBucket"
 
   CloudFrontUrl:
     Description: CloudFront distribution URL for frontend
-    Value: !Sub 'https://${CloudFrontDistribution.DomainName}'
+    Value: !Sub "https://${CloudFrontDistribution.DomainName}"
     Export:
-      Name: !Sub '${AWS::StackName}-CloudFrontUrl'
+      Name: !Sub "${AWS::StackName}-CloudFrontUrl"
 
   CloudFrontDistributionId:
     Description: CloudFront distribution ID
     Value: !Ref CloudFrontDistribution
     Export:
-      Name: !Sub '${AWS::StackName}-CloudFrontDistributionId'
+      Name: !Sub "${AWS::StackName}-CloudFrontDistributionId"

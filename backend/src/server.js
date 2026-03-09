@@ -9,8 +9,8 @@ import { WebSocketServer } from 'ws';
 import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { processTranscript } from './interview-engine.js';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { processTranscript, QUESTIONS } from './interview-engine.js';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
@@ -28,6 +28,70 @@ const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }));
 
 app.use(cors());
 app.use(express.json());
+
+// Save full interview conversation to S3 (called on completion, disconnection, or explicit end)
+async function saveInterviewSnapshot(meetingId, attendeeId, status) {
+  try {
+    // Load engine state (has conversation history)
+    const stateRes = await ddb.send(new GetCommand({
+      TableName: SESSION_TABLE,
+      Key: { pk: `MEETING#${meetingId}`, sk: `ATTENDEE#${attendeeId}` },
+    }));
+    const state = stateRes.Item || {};
+
+    // Load interview metadata (has candidateName, emails, etc.)
+    const metaRes = await ddb.send(new GetCommand({
+      TableName: SESSION_TABLE,
+      Key: { pk: `INTERVIEW#${meetingId}`, sk: `META` },
+    }));
+    const meta = metaRes.Item || {};
+
+    const snapshot = {
+      interviewId: meetingId,
+      candidateName: meta.candidateName || 'Unknown',
+      candidateEmail: meta.candidateEmail || '',
+      recruiterEmail: meta.recruiterEmail || '',
+      status,
+      savedAt: new Date().toISOString(),
+      startedAt: state.startedAt || null,
+      createdAt: meta.createdAt || null,
+      questionsAnswered: state.qIndex || 0,
+      totalQuestions: QUESTIONS.length,
+      completed: state.done || false,
+      conversation: (state.history || []).map((h, i) => ({
+        turn: i + 1,
+        question: h.q,
+        candidateAnswer: h.a,
+        aiReply: h.reply,
+        timestamp: h.t,
+      })),
+    };
+
+    await s3.send(new PutObjectCommand({
+      Bucket: 'ai-recruiter-interviews-090605004529',
+      Key: `interviews/${meetingId}/${status}-${Date.now()}.json`,
+      Body: JSON.stringify(snapshot, null, 2),
+      ContentType: 'application/json',
+      ServerSideEncryption: 'AES256',
+    }));
+
+    // Update interview status in DynamoDB without overwriting existing fields
+    await ddb.send(new UpdateCommand({
+      TableName: SESSION_TABLE,
+      Key: { pk: `INTERVIEW#${meetingId}`, sk: `META` },
+      UpdateExpression: 'SET #st = :status, updatedAt = :now',
+      ExpressionAttributeNames: { '#st': 'status' },
+      ExpressionAttributeValues: {
+        ':status': status,
+        ':now': new Date().toISOString(),
+      },
+    }));
+
+    console.log(`✅ Interview snapshot saved (${meetingId}, status: ${status}, turns: ${snapshot.conversation.length})`);
+  } catch (err) {
+    console.error('❌ Failed to save interview snapshot:', err);
+  }
+}
 
 // Rate limiting
 const limiter = rateLimit({
@@ -159,40 +223,9 @@ app.post('/interview/process', async (req, res) => {
       isInit: isInit === true,
     });
 
-    // Save to S3 when interview is done
+    // Save full conversation to S3 when interview is done
     if (result.done) {
-      try {
-        await s3.send(
-          new PutObjectCommand({
-            Bucket: 'ai-recruiter-interviews-090605004529',
-            Key: `interviews/${meetingId}-${Date.now()}.json`,
-            Body: JSON.stringify({
-              meetingId,
-              attendeeId,
-              timestamp: new Date().toISOString(),
-              completed: true,
-            }),
-            ServerSideEncryption: 'AES256',
-          })
-        );
-
-        // Mark interview as completed in DynamoDB
-        await ddb.send(
-          new PutCommand({
-            TableName: SESSION_TABLE,
-            Item: {
-              pk: `INTERVIEW#${meetingId}`,
-              sk: `META`,
-              status: 'completed',
-              completedAt: new Date().toISOString(),
-            },
-          })
-        );
-
-        console.log('✅ Saved completed interview to S3 and DynamoDB');
-      } catch (saveError) {
-        console.error('Save error:', saveError);
-      }
+      await saveInterviewSnapshot(meetingId, attendeeId, 'completed');
     }
 
     // Generate audio if requested
@@ -254,6 +287,15 @@ wss.on('connection', (ws, req) => {
         return;
       }
 
+      // Handle explicit end from candidate (stop button)
+      if (data.type === 'end') {
+        if (meetingId && attendeeId) {
+          await saveInterviewSnapshot(meetingId, attendeeId, 'ended_by_candidate');
+        }
+        ws.send(JSON.stringify({ type: 'ended' }));
+        return;
+      }
+
       // Handle initialization
       if (data.type === 'init') {
         const result = await processTranscript({
@@ -304,6 +346,11 @@ wss.on('connection', (ws, req) => {
             qIndex: result.qIndex,
           })
         );
+
+        // Save snapshot when interview completes via WebSocket
+        if (result.done) {
+          await saveInterviewSnapshot(meetingId, attendeeId, 'completed');
+        }
       }
     } catch (error) {
       console.error('WebSocket error:', error);
@@ -311,8 +358,13 @@ wss.on('connection', (ws, req) => {
     }
   });
 
-  ws.on('close', () => {
+  ws.on('close', async () => {
     console.log(`WebSocket closed: ${meetingId}/${attendeeId}`);
+    // Save snapshot on disconnect (connection lost, browser closed, etc.)
+    // Only save if interview was actually started (meetingId set during 'connect')
+    if (meetingId && attendeeId) {
+      await saveInterviewSnapshot(meetingId, attendeeId, 'disconnected');
+    }
   });
 
   ws.on('error', (error) => {
