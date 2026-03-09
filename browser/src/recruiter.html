@@ -198,7 +198,7 @@
         // Dynamic backend URL - localhost for local testing, Fargate IP for production via CloudFront
         const backendHost = window.location.hostname === 'localhost' 
             ? 'localhost:8080' 
-            : '63.179.254.69:8080';
+            : '18.196.201.216:8080';
         // HTTPS for production, HTTP for local
         const backendProtocol = window.location.hostname === 'localhost' ? 'http' : 'https';
         const BACKEND_URL = `${backendProtocol}://${backendHost}`;

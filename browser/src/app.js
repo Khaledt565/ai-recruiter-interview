@@ -16,7 +16,7 @@ class InterviewApp {
     // Configuration - Dynamic Backend URL
     const backendHost = window.location.hostname === 'localhost' 
       ? 'localhost:8080' 
-      : '63.179.254.69:8080';
+      : '18.196.201.216:8080';
     
     // HTTPS for production, HTTP for local
     const backendProtocol = window.location.hostname === 'localhost' ? 'http' : 'https';
