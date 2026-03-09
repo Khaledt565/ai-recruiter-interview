@@ -1,557 +1,812 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Create Interview Link - AI Recruiter</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-
-        .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            padding: 40px;
-            max-width: 600px;
-            width: 100%;
-        }
-
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 28px;
-        }
-
-        p.subtitle {
-            color: #666;
-            margin-bottom: 30px;
-        }
-
-        label {
-            display: block;
-            color: #495057;
-            font-weight: 500;
-            margin-top: 15px;
-            margin-bottom: 5px;
-        }
-
-        input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.3s;
-        }
-
-        input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        button {
-            width: 100%;
-            padding: 15px;
-            margin-top: 25px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.3s, box-shadow 0.3s;
-        }
-
-        button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .result {
-            margin-top: 30px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            display: none;
-        }
-
-        .result.show {
-            display: block;
-        }
-
-        .result h3 {
-            color: #28a745;
-            margin-bottom: 15px;
-        }
-
-        .link-box {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            word-break: break-all;
-            color: #667eea;
-            font-weight: 500;
-            margin: 15px 0;
-            border: 2px dashed #667eea;
-        }
-
-        .copy-btn {
-            background: #28a745;
-            margin-top: 10px;
-        }
-
-        .copy-btn:hover {
-            background: #218838;
-        }
-
-        .info {
-            color: #6c757d;
-            font-size: 14px;
-            margin-top: 10px;
-        }
-
-        .error {
-            color: #dc3545;
-            margin-top: 15px;
-            padding: 10px;
-            background: #f8d7da;
-            border-radius: 6px;
-            display: none;
-        }
-
-        .error.show {
-            display: block;
-        }
-
-        textarea {
-            width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            font-size: 15px;
-            font-family: inherit;
-            transition: border-color 0.2s;
-            box-sizing: border-box;
-            color: #343a40;
-        }
-
-        textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .sessions-section {
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
-            margin-top: 20px;
-        }
-
-        .sessions-section h2 {
-            margin-bottom: 20px;
-            color: #343a40;
-            font-size: 20px;
-        }
-
-        .sessions-load-row {
-            display: flex;
-            gap: 10px;
-            align-items: flex-end;
-            margin-bottom: 15px;
-        }
-
-        .sessions-load-row > div {
-            flex: 1;
-        }
-
-        .sessions-load-row label {
-            margin-bottom: 5px;
-            display: block;
-        }
-
-        .sessions-load-row input {
-            margin-bottom: 0;
-        }
-
-        .sessions-load-row button {
-            margin-bottom: 0;
-            padding: 12px 20px;
-            white-space: nowrap;
-        }
-
-        .sessions-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 14px;
-        }
-
-        .sessions-table th {
-            background: #f8f9fa;
-            padding: 10px 12px;
-            text-align: left;
-            font-weight: 600;
-            color: #495057;
-            border-bottom: 2px solid #dee2e6;
-        }
-
-        .sessions-table td {
-            padding: 10px 12px;
-            border-bottom: 1px solid #f0f0f0;
-            color: #343a40;
-            vertical-align: middle;
-        }
-
-        .sessions-table tr:hover td { background: #f8f9fa; cursor: default; }
-
-        .badge {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .badge-completed { background: #d4edda; color: #155724; }
-        .badge-created { background: #d1ecf1; color: #0c5460; }
-        .badge-ended { background: #fff3cd; color: #856404; }
-        .badge-disconnected { background: #f8d7da; color: #721c24; }
-        .rec-strong-yes { color: #155724; font-weight: 600; }
-        .rec-yes { color: #0c5460; font-weight: 600; }
-        .rec-maybe { color: #856404; font-weight: 600; }
-        .rec-no { color: #721c24; font-weight: 600; }
-
-        .auth-bar {
-            background: white;
-            border-radius: 12px;
-            padding: 12px 20px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.06);
-            font-size: 14px;
-        }
-
-        .auth-bar span { color: #495057; }
-        .auth-bar strong { color: #343a40; }
-
-        .logout-btn {
-            background: none;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
-            padding: 5px 12px;
-            font-size: 13px;
-            cursor: pointer;
-            color: #6c757d;
-            transition: all 0.15s;
-        }
-
-        .logout-btn:hover { border-color: #dc3545; color: #dc3545; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recruiter Dashboard  AI Interviewer</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --sidebar-w: 240px;
+      --sidebar-bg: #0f0f1a;
+      --sidebar-hover: rgba(255,255,255,0.06);
+      --sidebar-active: rgba(99,102,241,0.18);
+      --accent: #6366f1;
+      --accent-light: #818cf8;
+      --accent-glow: rgba(99,102,241,0.25);
+      --bg: #f5f6fa;
+      --surface: #ffffff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --yes-bg: #d1fae5; --yes-fg: #065f46;
+      --maybe-bg: #fef3c7; --maybe-fg: #92400e;
+      --no-bg: #fee2e2; --no-fg: #991b1b;
+      --strong-bg: #ede9fe; --strong-fg: #4c1d95;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; font-size: 14px; }
+    .sidebar { width: var(--sidebar-w); background: var(--sidebar-bg); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 100; overflow-y: auto; }
+    .sidebar-logo { padding: 24px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+    .sidebar-logo .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .sidebar-logo .icon-wrap { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent), #a855f7); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .sidebar-logo .brand-name { font-size: 15px; font-weight: 700; color: #fff; line-height: 1.2; }
+    .sidebar-logo .brand-sub { font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 400; }
+    .sidebar-nav { padding: 16px 10px; flex: 1; }
+    .nav-section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.3); padding: 10px 10px 6px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; cursor: pointer; color: rgba(255,255,255,0.55); font-size: 13.5px; font-weight: 500; transition: background 0.15s, color 0.15s; user-select: none; margin-bottom: 2px; }
+    .nav-item:hover { background: var(--sidebar-hover); color: rgba(255,255,255,0.85); }
+    .nav-item.active { background: var(--sidebar-active); color: var(--accent-light); }
+    .nav-item .nav-icon { font-size: 16px; width: 20px; text-align: center; flex-shrink: 0; }
+    .nav-item .nav-badge { margin-left: auto; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 20px; min-width: 18px; text-align: center; }
+    .sidebar-footer { padding: 16px 10px; border-top: 1px solid rgba(255,255,255,0.07); }
+    .user-chip { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: default; transition: background 0.15s; }
+    .user-chip:hover { background: var(--sidebar-hover); }
+    .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), #a855f7); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .user-info { flex: 1; min-width: 0; }
+    .user-name { font-size: 12.5px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .user-role { font-size: 11px; color: rgba(255,255,255,0.4); }
+    .signout-btn { background: none; border: none; cursor: pointer; color: rgba(255,255,255,0.3); font-size: 16px; padding: 4px; border-radius: 6px; transition: color 0.15s; }
+    .signout-btn:hover { color: #f87171; }
+    .main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+    .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 28px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+    .topbar-title { font-size: 17px; font-weight: 700; color: var(--text); }
+    .topbar-subtitle { font-size: 12px; color: var(--muted); margin-top: 1px; }
+    .topbar-right { display: flex; align-items: center; gap: 12px; }
+    .topbar-btn { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #4f46e5; }
+    .btn-outline { background: transparent; border: 1.5px solid var(--border); color: var(--text); }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+    .page-content { padding: 28px; flex: 1; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--surface); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+    .stat-header { display: flex; align-items: center; justify-content: space-between; }
+    .stat-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+    .stat-icon-blue { background: #eff6ff; }
+    .stat-icon-green { background: #f0fdf4; }
+    .stat-icon-purple { background: #f5f3ff; }
+    .stat-icon-amber { background: #fffbeb; }
+    .stat-value { font-size: 28px; font-weight: 800; color: var(--text); line-height: 1; }
+    .stat-delta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .stat-delta .up { color: #10b981; font-weight: 600; }
+    .stat-delta .neutral { color: var(--muted); }
+    .dashboard-grid { display: grid; grid-template-columns: 1fr 340px; gap: 20px; }
+    .card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); }
+    .card-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 14px; border-bottom: 1px solid var(--border); }
+    .card-title { font-size: 14px; font-weight: 700; color: var(--text); }
+    .card-action { font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; background: none; border: none; padding: 0; }
+    .card-action:hover { text-decoration: underline; }
+    .activity-list { padding: 8px 0; }
+    .activity-item { display: flex; align-items: center; gap: 14px; padding: 12px 20px; transition: background 0.12s; }
+    .activity-item:hover { background: #fafafa; }
+    .activity-avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #a855f7); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .activity-info { flex: 1; min-width: 0; }
+    .activity-name { font-size: 13.5px; font-weight: 600; color: var(--text); }
+    .activity-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .activity-right { text-align: right; flex-shrink: 0; }
+    .activity-time { font-size: 11.5px; color: var(--muted); }
+    .score-ring { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; font-size: 13px; font-weight: 700; border: 3px solid; }
+    .score-high { border-color: #10b981; color: #065f46; background: #d1fae5; }
+    .score-mid  { border-color: #f59e0b; color: #92400e; background: #fef3c7; }
+    .score-low  { border-color: #ef4444; color: #991b1b; background: #fee2e2; }
+    .score-na   { border-color: #d1d5db; color: var(--muted); background: #f9fafb; }
+    .quick-actions { padding: 12px 16px 16px; }
+    .qa-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border-radius: 10px; border: 1.5px solid var(--border); background: var(--bg); cursor: pointer; text-align: left; margin-bottom: 8px; transition: all 0.15s; color: var(--text); }
+    .qa-btn:last-child { margin-bottom: 0; }
+    .qa-btn:hover { border-color: var(--accent); background: #eef2ff; }
+    .qa-btn .qa-icon { font-size: 20px; width: 24px; text-align: center; }
+    .qa-btn .qa-label { font-size: 13px; font-weight: 600; }
+    .qa-btn .qa-desc { font-size: 11.5px; color: var(--muted); }
+    .table-toolbar { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .search-box { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1.5px solid var(--border); border-radius: 8px; padding: 7px 12px; flex: 1; max-width: 320px; transition: border-color 0.15s; }
+    .search-box:focus-within { border-color: var(--accent); }
+    .search-box input { border: none; background: transparent; outline: none; font-size: 13px; width: 100%; color: var(--text); }
+    .search-box span { color: var(--muted); font-size: 14px; }
+    .filter-tabs { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+    .filter-tab { padding: 6px 12px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px solid transparent; color: var(--muted); background: transparent; transition: all 0.15s; }
+    .filter-tab:hover { background: var(--bg); color: var(--text); }
+    .filter-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th { padding: 10px 16px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border-bottom: 1px solid var(--border); background: #fafafa; cursor: pointer; user-select: none; white-space: nowrap; }
+    .data-table th:hover { color: var(--text); }
+    .data-table th .sort-arrow { margin-left: 4px; opacity: 0.4; }
+    .data-table th.sorted .sort-arrow { opacity: 1; color: var(--accent); }
+    .data-table td { padding: 13px 16px; border-bottom: 1px solid #f3f4f6; font-size: 13.5px; color: var(--text); vertical-align: middle; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tbody tr { cursor: pointer; transition: background 0.12s; }
+    .data-table tbody tr:hover { background: #fafbff; }
+    .data-table tbody tr.expanded { background: #f5f3ff; }
+    .candidate-cell { display: flex; align-items: center; gap: 10px; }
+    .cand-avatar { width: 34px; height: 34px; border-radius: 50%; font-size: 13px; font-weight: 700; color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .cand-name { font-weight: 600; font-size: 13.5px; }
+    .cand-email { font-size: 11.5px; color: var(--muted); }
+    .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 20px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+    .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+    .badge-completed { background: #d1fae5; color: #065f46; }
+    .badge-completed::before { background: #10b981; }
+    .badge-created { background: #eff6ff; color: #1d4ed8; }
+    .badge-created::before { background: #60a5fa; }
+    .badge-ended { background: #fef3c7; color: #92400e; }
+    .badge-ended::before { background: #f59e0b; }
+    .badge-disconnected { background: #fee2e2; color: #991b1b; }
+    .badge-disconnected::before { background: #ef4444; }
+    .rec-badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 11.5px; font-weight: 700; }
+    .rec-strong { background: var(--strong-bg); color: var(--strong-fg); }
+    .rec-yes    { background: var(--yes-bg);    color: var(--yes-fg); }
+    .rec-maybe  { background: var(--maybe-bg);  color: var(--maybe-fg); }
+    .rec-no     { background: var(--no-bg);     color: var(--no-fg); }
+    .detail-row { display: none; }
+    .detail-row.open { display: table-row; }
+    .detail-panel-inner { padding: 20px 20px 20px 60px; background: #f9fafb; border-bottom: 1px solid var(--border); }
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .detail-section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 10px; }
+    .chip-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+    .chip-green { background: #d1fae5; color: #065f46; }
+    .chip-red   { background: #fee2e2; color: #991b1b; }
+    .transcript-list { display: flex; flex-direction: column; gap: 10px; max-height: 240px; overflow-y: auto; }
+    .t-turn { display: flex; flex-direction: column; gap: 4px; }
+    .t-q { font-size: 12px; font-weight: 600; color: var(--accent); }
+    .t-a { font-size: 12.5px; color: var(--text); background: #fff; border-radius: 6px; padding: 6px 10px; border-left: 2px solid #e5e7eb; }
+    .summary-text { font-size: 13px; color: #374151; line-height: 1.6; }
+    .score-bar-wrap { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+    .score-bar-bg { flex: 1; height: 6px; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
+    .score-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+    .score-bar-label { font-size: 13px; font-weight: 700; color: var(--text); width: 32px; text-align: right; }
+    .create-layout { display: grid; grid-template-columns: 1fr 380px; gap: 24px; max-width: 1000px; }
+    .form-group { margin-bottom: 18px; }
+    .form-label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+    .form-hint { font-size: 11.5px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+    .form-input { width: 100%; padding: 10px 13px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; color: var(--text); background: #fff; transition: border-color 0.15s, box-shadow 0.15s; outline: none; }
+    .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    textarea.form-input { resize: vertical; min-height: 110px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .submit-btn { width: 100%; padding: 12px; background: var(--accent); color: #fff; border: none; border-radius: 9px; font-size: 14px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.15s, transform 0.1s; }
+    .submit-btn:hover:not(:disabled) { background: #4f46e5; transform: translateY(-1px); }
+    .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .link-result { background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); border-radius: var(--radius); padding: 24px; color: #fff; display: none; margin-top: 16px; }
+    .link-result.show { display: block; }
+    .link-result h3 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .link-result .sub { font-size: 12px; opacity: 0.75; margin-bottom: 14px; }
+    .link-box-dark { background: rgba(0,0,0,0.25); border-radius: 8px; padding: 11px 14px; font-size: 12px; word-break: break-all; margin-bottom: 12px; font-family: monospace; }
+    .copy-btn-white { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: #fff; color: var(--accent); font-weight: 700; font-size: 13px; border: none; border-radius: 7px; cursor: pointer; transition: opacity 0.15s; }
+    .copy-btn-white:hover { opacity: 0.9; }
+    .tips-card { padding: 20px; }
+    .tip-item { display: flex; gap: 10px; margin-bottom: 14px; }
+    .tip-item:last-child { margin-bottom: 0; }
+    .tip-num { width: 22px; height: 22px; border-radius: 50%; background: #eef2ff; color: var(--accent); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .tip-text { font-size: 12.5px; color: #374151; line-height: 1.5; }
+    .tip-text strong { color: var(--text); font-weight: 600; }
+    .recent-links { padding: 4px 0 8px; }
+    .recent-link-item { display: flex; align-items: center; gap: 12px; padding: 10px 20px; transition: background 0.12s; }
+    .recent-link-item:hover { background: #fafafa; }
+    .recent-link-icon { width: 30px; height: 30px; border-radius: 8px; background: #eef2ff; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .recent-link-name { font-size: 13px; font-weight: 600; color: var(--text); }
+    .recent-link-time { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .recent-link-copy { margin-left: auto; background: none; border: none; cursor: pointer; color: var(--muted); font-size: 16px; padding: 4px; border-radius: 5px; transition: color 0.15s; }
+    .recent-link-copy:hover { color: var(--accent); }
+    .inline-error { color: #dc2626; font-size: 13px; margin-top: 10px; padding: 10px 14px; background: #fef2f2; border-radius: 8px; display: none; }
+    .inline-error.show { display: block; }
+    .empty-state { text-align: center; padding: 48px 20px; color: var(--muted); }
+    .empty-state .es-icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; }
+    .skeleton { background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 6px; }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    .loading-row td { padding: 12px 16px; }
+    .toast { position: fixed; bottom: 28px; right: 28px; background: #1f2937; color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 500; box-shadow: 0 8px 24px rgba(0,0,0,0.2); transform: translateY(80px); opacity: 0; transition: all 0.25s ease; z-index: 999; display: flex; align-items: center; gap: 8px; }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.success { border-left: 3px solid #10b981; }
+    .toast.error   { border-left: 3px solid #ef4444; }
+    @media (max-width: 1100px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .dashboard-grid { grid-template-columns: 1fr; } .create-layout { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) { :root { --sidebar-w: 0px; } .sidebar { display: none; } .main { margin-left: 0; } .stats-grid { grid-template-columns: 1fr 1fr; } .form-row { grid-template-columns: 1fr; } .detail-grid { grid-template-columns: 1fr; } }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🎯 Create Interview Link</h1>
-        <p class="subtitle">Generate a unique interview link for your candidate</p>
-        
-        <form id="createForm">
-            <label for="candidateName">Candidate Name *</label>
-            <input 
-                type="text" 
-                id="candidateName" 
-                placeholder="John Doe"
-                required
-            >
-            
-            <label for="candidateEmail">Candidate Email *</label>
-            <input 
-                type="email" 
-                id="candidateEmail" 
-                placeholder="john@example.com"
-                required
-            >
-            
-            <label for="recruiterEmail">Your Email *</label>
-            <input 
-                type="email" 
-                id="recruiterEmail" 
-                placeholder="recruiter@company.com"
-                required
-            >
 
-            <label for="jobDescription">Job Description <span style="font-weight:400;color:#6c757d;">(optional — enables AI-tailored questions)</span></label>
-            <textarea
-                id="jobDescription"
-                placeholder="Paste the job description here to generate role-specific interview questions..."
-                rows="4"
-            ></textarea>
-            
-            <button type="submit" id="submitBtn">
-                Generate Interview Link
-            </button>
-        </form>
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <a class="brand" href="#">
+      <div class="icon-wrap">&#127919;</div>
+      <div>
+        <div class="brand-name">AI Interviewer</div>
+        <div class="brand-sub">Recruiter Portal</div>
+      </div>
+    </a>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Main</div>
+    <div class="nav-item active" data-panel="dashboard" onclick="navigate(this)">
+      <span class="nav-icon">&#127968;</span> Overview
+    </div>
+    <div class="nav-item" data-panel="candidates" onclick="navigate(this)">
+      <span class="nav-icon">&#128101;</span> Candidates
+      <span class="nav-badge" id="candidateBadge">&#8212;</span>
+    </div>
+    <div class="nav-section-label" style="margin-top:8px;">Actions</div>
+    <div class="nav-item" data-panel="create" onclick="navigate(this)">
+      <span class="nav-icon">&#9993;</span> Create Interview
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="user-chip">
+      <div class="user-avatar" id="userAvatar">R</div>
+      <div class="user-info">
+        <div class="user-name" id="userNameDisplay">Recruiter</div>
+        <div class="user-role">Recruiter</div>
+      </div>
+      <button class="signout-btn" onclick="signOut()" title="Sign out">&#9167;</button>
+    </div>
+  </div>
+</aside>
 
-        <div class="error" id="error"></div>
-        
-        <div class="result" id="result">
-            <h3>✅ Interview Link Created!</h3>
-            <p><strong>Send this link to the candidate:</strong></p>
-            <div class="link-box" id="linkDisplay"></div>
-            <button class="copy-btn" onclick="copyLink()">📋 Copy Link</button>
-            <p class="info">
-                ⏰ Link expires in 7 days<br>
-                🔒 Can only be used once<br>
-                👤 Personalized for: <span id="candidateNameDisplay"></span>
-            </p>
+<div class="main">
+  <header class="topbar">
+    <div>
+      <div class="topbar-title" id="topbarTitle">Overview</div>
+      <div class="topbar-subtitle" id="topbarSubtitle">Welcome back</div>
+    </div>
+    <div class="topbar-right">
+      <button class="topbar-btn btn-outline" onclick="loadAllData()">&#8635; Refresh</button>
+      <button class="topbar-btn btn-primary" onclick="navigate(document.querySelector('[data-panel=create]'))">&#43; New Interview</button>
+    </div>
+  </header>
+
+  <div class="page-content">
+
+    <!-- PANEL: Overview -->
+    <div class="panel active" id="panel-dashboard">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Total Created</span>
+            <div class="stat-icon stat-icon-blue">&#128203;</div>
+          </div>
+          <div class="stat-value" id="stat-total">&#8212;</div>
+          <div class="stat-delta"><span class="neutral">All time</span></div>
         </div>
-
-        <div class="sessions-section">
-            <h2>📋 Past Interviews</h2>
-            <div class="sessions-load-row">
-                <div>
-                    <label for="sessionsEmail">Your Recruiter Email</label>
-                    <input type="email" id="sessionsEmail" placeholder="recruiter@company.com">
-                </div>
-                <button onclick="loadSessions()" id="loadBtn">Load Sessions</button>
-            </div>
-            <div class="error" id="sessionsError"></div>
-            <div id="sessionsContainer" style="display:none;">
-                <p id="sessionsCount" style="color:#6c757d;font-size:14px;margin-bottom:10px;"></p>
-                <table class="sessions-table">
-                    <thead>
-                        <tr>
-                            <th>Candidate</th>
-                            <th>Status</th>
-                            <th>Date</th>
-                            <th>Score</th>
-                            <th>Recommendation</th>
-                        </tr>
-                    </thead>
-                    <tbody id="sessionsBody"></tbody>
-                </table>
-            </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Completed</span>
+            <div class="stat-icon stat-icon-green">&#9989;</div>
+          </div>
+          <div class="stat-value" id="stat-completed">&#8212;</div>
+          <div class="stat-delta" id="stat-rate"><span class="neutral">completion rate</span></div>
         </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Avg AI Score</span>
+            <div class="stat-icon stat-icon-purple">&#129504;</div>
+          </div>
+          <div class="stat-value" id="stat-avg-score">&#8212;</div>
+          <div class="stat-delta"><span class="neutral">out of 10</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-label">Strong Yes</span>
+            <div class="stat-icon stat-icon-amber">&#11088;</div>
+          </div>
+          <div class="stat-value" id="stat-strong">&#8212;</div>
+          <div class="stat-delta"><span class="neutral">top candidates</span></div>
+        </div>
+      </div>
+      <div class="dashboard-grid">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Recent Candidates</span>
+            <button class="card-action" onclick="navigate(document.querySelector('[data-panel=candidates]'))">View all &rarr;</button>
+          </div>
+          <div class="activity-list" id="recentActivity">
+            <div class="empty-state"><div class="es-icon">&#128237;</div><p>No interviews yet</p></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Quick Actions</span></div>
+            <div class="quick-actions">
+              <button class="qa-btn" onclick="navigate(document.querySelector('[data-panel=create]'))">
+                <span class="qa-icon">&#9993;</span>
+                <div><div class="qa-label">New Interview Link</div><div class="qa-desc">Generate a personalised link</div></div>
+              </button>
+              <button class="qa-btn" onclick="navigate(document.querySelector('[data-panel=candidates]'))">
+                <span class="qa-icon">&#128269;</span>
+                <div><div class="qa-label">Browse Candidates</div><div class="qa-desc">View all sessions &amp; results</div></div>
+              </button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Recommendations</span></div>
+            <div style="padding:16px 20px;" id="recBreakdown">
+              <div class="empty-state" style="padding:20px 0;"><p>No completed interviews</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <script>
-        // ── Auth guard ─────────────────────────────────────────────────────────
-        const _token = localStorage.getItem('recruiter_id_token');
-        const _expiry = localStorage.getItem('recruiter_token_expiry');
-        if (!_token || !_expiry || Date.now() >= parseInt(_expiry, 10)) {
-            localStorage.removeItem('recruiter_id_token');
-            window.location.replace('recruiter-login.html');
-        }
+    <!-- PANEL: Candidates -->
+    <div class="panel" id="panel-candidates">
+      <div class="card">
+        <div class="table-toolbar">
+          <div class="search-box">
+            <span>&#128269;</span>
+            <input type="text" id="searchInput" placeholder="Search by name or email&#8230;" oninput="filterTable()">
+          </div>
+          <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="all" onclick="setFilter(this)">All</button>
+            <button class="filter-tab" data-filter="completed" onclick="setFilter(this)">Completed</button>
+            <button class="filter-tab" data-filter="created" onclick="setFilter(this)">Not Started</button>
+            <button class="filter-tab" data-filter="ended" onclick="setFilter(this)">Ended Early</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th onclick="sortTable('candidateName')">Candidate <span class="sort-arrow">&#8597;</span></th>
+                <th onclick="sortTable('status')">Status <span class="sort-arrow">&#8597;</span></th>
+                <th onclick="sortTable('createdAt')">Date <span class="sort-arrow">&#8597;</span></th>
+                <th onclick="sortTable('score')">Score <span class="sort-arrow">&#8597;</span></th>
+                <th onclick="sortTable('recommendation')">Recommendation <span class="sort-arrow">&#8597;</span></th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="candidatesBody">
+              <tr class="loading-row"><td colspan="6"><div class="skeleton" style="height:18px;width:60%;"></div></td></tr>
+              <tr class="loading-row"><td colspan="6"><div class="skeleton" style="height:18px;width:75%;"></div></td></tr>
+              <tr class="loading-row"><td colspan="6"><div class="skeleton" style="height:18px;width:50%;"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
 
-        const recruiterEmail = localStorage.getItem('recruiter_email') || '';
+    <!-- PANEL: Create Interview -->
+    <div class="panel" id="panel-create">
+      <div class="create-layout">
+        <div class="card" style="padding:28px;">
+          <h2 style="font-size:16px;font-weight:700;margin-bottom:4px;">New Interview</h2>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:24px;">Fill in the details to generate a personalised interview link for your candidate.</p>
+          <form id="createForm">
+            <div class="form-row" style="margin-bottom:18px;">
+              <div>
+                <label class="form-label" for="candidateName">Full Name *</label>
+                <input class="form-input" type="text" id="candidateName" placeholder="Jane Smith" required autocomplete="off">
+              </div>
+              <div>
+                <label class="form-label" for="candidateEmail">Candidate Email *</label>
+                <input class="form-input" type="email" id="candidateEmail" placeholder="jane@example.com" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="recruiterEmail">Your Email *</label>
+              <input class="form-input" type="email" id="recruiterEmail" placeholder="you@company.com" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="jobDescription">
+                Job Description
+                <span class="form-hint">&#8212; optional, enables AI-tailored questions</span>
+              </label>
+              <textarea class="form-input" id="jobDescription" placeholder="Paste the job description for this role. The AI will generate relevant interview questions automatically&#8230;" rows="5"></textarea>
+            </div>
+            <div class="inline-error" id="createError"></div>
+            <button type="submit" class="submit-btn" id="submitBtn">
+              <span id="submitBtnText">Generate Interview Link</span>
+            </button>
+          </form>
+          <div class="link-result" id="linkResult">
+            <h3>&#9989; Interview link ready!</h3>
+            <p class="sub">Send this link to <span id="linkCandidateName"></span></p>
+            <div class="link-box-dark" id="linkDisplay"></div>
+            <button class="copy-btn-white" onclick="copyLink()">&#128203; Copy link</button>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card">
+            <div class="card-header"><span class="card-title">How it works</span></div>
+            <div class="tips-card">
+              <div class="tip-item"><div class="tip-num">1</div><div class="tip-text"><strong>Fill in the form</strong> &#8212; candidate name, email, and optionally a job description.</div></div>
+              <div class="tip-item"><div class="tip-num">2</div><div class="tip-text"><strong>Send the link</strong> &#8212; the candidate opens it and completes a voice interview with the AI.</div></div>
+              <div class="tip-item"><div class="tip-num">3</div><div class="tip-text"><strong>Get results</strong> &#8212; once done, the AI summary, score and transcript appear in Candidates.</div></div>
+              <div class="tip-item"><div class="tip-num">4</div><div class="tip-text"><strong>Link expires in 7 days</strong> and can only be used once.</div></div>
+            </div>
+          </div>
+          <div class="card" id="recentLinksCard" style="display:none;">
+            <div class="card-header"><span class="card-title">Recently Created</span></div>
+            <div class="recent-links" id="recentLinksList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-        // Inject auth bar
-        (function renderAuthBar() {
-            const bar = document.createElement('div');
-            bar.className = 'auth-bar';
-            bar.innerHTML = `<span>Signed in as <strong>${recruiterEmail}</strong></span><button class="logout-btn" onclick="signOut()">Sign out</button>`;
-            document.querySelector('.container').insertAdjacentElement('afterbegin', bar);
-        })();
+  </div>
+</div>
 
-        // Pre-fill recruiter email fields
-        (function prefillEmail() {
-            const f = document.getElementById('recruiterEmail');
-            const s = document.getElementById('sessionsEmail');
-            if (f) f.value = recruiterEmail;
-            if (s) s.value = recruiterEmail;
-        })();
+<div class="toast" id="toast"></div>
 
-        function signOut() {
-            ['recruiter_id_token','recruiter_access_token','recruiter_refresh_token','recruiter_token_expiry','recruiter_email']
-                .forEach(k => localStorage.removeItem(k));
-            window.location.replace('recruiter-login.html');
-        }
+<script>
+  // Auth guard
+  var _token = localStorage.getItem('recruiter_id_token');
+  var _expiry = localStorage.getItem('recruiter_token_expiry');
+  if (!_token || !_expiry || Date.now() >= parseInt(_expiry, 10)) {
+    localStorage.removeItem('recruiter_id_token');
+    window.location.replace('recruiter-login.html');
+  }
 
-        function authHeaders() {
-            return { 'Authorization': 'Bearer ' + localStorage.getItem('recruiter_id_token') };
-        }
+  var recruiterEmail = localStorage.getItem('recruiter_email') || '';
+  var backendHost = window.location.hostname === 'localhost'
+    ? 'localhost:8080'
+    : 'l05uyc9rza.execute-api.eu-central-1.amazonaws.com/prod';
+  var backendProtocol = window.location.hostname === 'localhost' ? 'http' : 'https';
+  var BACKEND_URL = backendProtocol + '://' + backendHost;
 
-        // Dynamic backend URL - localhost for local testing, API Gateway for production via CloudFront
-        const backendHost = window.location.hostname === 'localhost' 
-            ? 'localhost:8080' 
-            : 'l05uyc9rza.execute-api.eu-central-1.amazonaws.com/prod';
-        // Production: use HTTPS via API Gateway, Local: use HTTP
-        const backendProtocol = window.location.hostname === 'localhost' ? 'http' : 'https';
-        const BACKEND_URL = `${backendProtocol}://${backendHost}`;
-        let generatedLink = '';
+  function authHeaders() {
+    return { 'Authorization': 'Bearer ' + localStorage.getItem('recruiter_id_token') };
+  }
 
-        document.getElementById('createForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const submitBtn = document.getElementById('submitBtn');
-            const errorDiv = document.getElementById('error');
-            const resultDiv = document.getElementById('result');
-            
-            errorDiv.classList.remove('show');
-            resultDiv.classList.remove('show');
-            
-            submitBtn.disabled = true;
-            submitBtn.textContent = 'Creating link...';
-            
-            const data = {
-                candidateName: document.getElementById('candidateName').value,
-                candidateEmail: document.getElementById('candidateEmail').value,
-                recruiterEmail: document.getElementById('recruiterEmail').value,
-                jobDescription: document.getElementById('jobDescription').value.trim() || undefined,
-            };
-            
-            try {
-                const response = await fetch(`${BACKEND_URL}/interview/create`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-                    body: JSON.stringify(data),
-                });
-                
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Failed to create link');
-                }
-                
-                const result = await response.json();
-                
-                generatedLink = result.interviewLink;
-                document.getElementById('linkDisplay').textContent = generatedLink;
-                document.getElementById('candidateNameDisplay').textContent = data.candidateName;
-                resultDiv.classList.add('show');
-                
-                // Pre-fill recruiter email in the sessions panel
-                document.getElementById('sessionsEmail').value = data.recruiterEmail;
-                document.getElementById('createForm').reset();
-                
-                console.log('Interview link created:', result);
-                
-            } catch (error) {
-                console.error('Error:', error);
-                errorDiv.textContent = `❌ Error: ${error.message}`;
-                errorDiv.classList.add('show');
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Generate Interview Link';
-            }
-        });
-        
-        async function loadSessions() {
-            const emailInput = document.getElementById('sessionsEmail');
-            const loadBtn = document.getElementById('loadBtn');
-            const errDiv = document.getElementById('sessionsError');
-            const container = document.getElementById('sessionsContainer');
-            const tbody = document.getElementById('sessionsBody');
-            const count = document.getElementById('sessionsCount');
+  // User display
+  (function initUser() {
+    var display = recruiterEmail.split('@')[0] || 'Recruiter';
+    document.getElementById('userNameDisplay').textContent = recruiterEmail || 'Recruiter';
+    document.getElementById('userAvatar').textContent = display[0].toUpperCase();
+    document.getElementById('recruiterEmail').value = recruiterEmail;
+  })();
 
-            errDiv.classList.remove('show');
-            container.style.display = 'none';
+  function signOut() {
+    ['recruiter_id_token','recruiter_access_token','recruiter_refresh_token','recruiter_token_expiry','recruiter_email']
+      .forEach(function(k) { localStorage.removeItem(k); });
+    window.location.replace('recruiter-login.html');
+  }
 
-            const email = emailInput.value.trim();
-            if (!email) {
-                errDiv.textContent = '❌ Please enter your recruiter email.';
-                errDiv.classList.add('show');
-                return;
-            }
+  // Navigation
+  var panelMeta = {
+    dashboard:  { title: 'Overview',        subtitle: 'Welcome back' },
+    candidates: { title: 'Candidates',       subtitle: 'All your interview sessions' },
+    create:     { title: 'Create Interview', subtitle: 'Generate a new interview link' },
+  };
 
-            loadBtn.disabled = true;
-            loadBtn.textContent = 'Loading...';
-            try {
-                const res = await fetch(`${BACKEND_URL}/interview/sessions?recruiterEmail=${encodeURIComponent(email)}`, { headers: authHeaders() });
-                if (!res.ok) throw new Error('Failed to load sessions');
-                const data = await res.json();
-                const sessions = data.sessions || [];
+  function navigate(el) {
+    var panel = el.dataset.panel;
+    document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.toggle('active', n === el); });
+    document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+    document.getElementById('panel-' + panel).classList.add('active');
+    document.getElementById('topbarTitle').textContent = panelMeta[panel].title;
+    document.getElementById('topbarSubtitle').textContent = panelMeta[panel].subtitle;
+    if (panel === 'candidates') loadCandidates();
+    if (panel === 'dashboard') loadDashboard();
+  }
 
-                count.textContent = `${sessions.length} interview${sessions.length !== 1 ? 's' : ''} found`;
-                tbody.innerHTML = '';
+  // Toast
+  function showToast(msg, type) {
+    type = type || 'success';
+    var t = document.getElementById('toast');
+    t.textContent = (type === 'success' ? '\u2705 ' : '\u274C ') + msg;
+    t.className = 'toast ' + type + ' show';
+    setTimeout(function() { t.classList.remove('show'); }, 3200);
+  }
 
-                if (sessions.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#6c757d;padding:20px;">No interviews found for this email.</td></tr>';
-                } else {
-                    sessions.forEach(s => {
-                        const date = s.createdAt
-                            ? new Date(s.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                            : '—';
-                        const recClass = getRecClass(s.recommendation);
-                        const score = s.score != null ? `${s.score}/10` : '—';
-                        const rec = s.recommendation || '—';
-                        const titleAttr = s.summary ? ` title="${escapeHtml(s.summary)}"` : '';
-                        tbody.innerHTML += `<tr${titleAttr}>
-                            <td><strong>${escapeHtml(s.candidateName || '—')}</strong><br><span style="color:#6c757d;font-size:12px;">${escapeHtml(s.candidateEmail || '')}</span></td>
-                            <td>${getStatusBadge(s.status || 'unknown')}</td>
-                            <td>${date}</td>
-                            <td style="text-align:center;">${score}</td>
-                            <td class="${recClass}">${rec}</td>
-                        </tr>`;
-                    });
-                }
-                container.style.display = 'block';
-            } catch (err) {
-                errDiv.textContent = `❌ Error: ${err.message}`;
-                errDiv.classList.add('show');
-            } finally {
-                loadBtn.disabled = false;
-                loadBtn.textContent = 'Load Sessions';
-            }
-        }
+  // Data state
+  var allSessions = [];
+  var currentFilter = 'all';
+  var sortKey = 'createdAt';
+  var sortDir = -1;
+  var recentlyCreated = [];
+  var expandedRow = null;
 
-        function getStatusBadge(status) {
-            if (status === 'completed') return '<span class="badge badge-completed">Completed</span>';
-            if (status === 'created') return '<span class="badge badge-created">Not Started</span>';
-            if (status && status.includes('ended')) return '<span class="badge badge-ended">Ended Early</span>';
-            if (status === 'disconnected') return '<span class="badge badge-disconnected">Disconnected</span>';
-            return `<span class="badge" style="background:#e9ecef;color:#495057;">${escapeHtml(status)}</span>`;
-        }
+  function loadAllData() {
+    return loadSessions().then(function() {
+      renderDashboard();
+      if (document.getElementById('panel-candidates').classList.contains('active')) renderTable();
+    });
+  }
 
-        function getRecClass(rec) {
-            if (rec === 'Strong Yes') return 'rec-strong-yes';
-            if (rec === 'Yes') return 'rec-yes';
-            if (rec === 'Maybe') return 'rec-maybe';
-            if (rec === 'No') return 'rec-no';
-            return '';
-        }
+  function loadSessions() {
+    return fetch(BACKEND_URL + '/interview/sessions?recruiterEmail=' + encodeURIComponent(recruiterEmail), { headers: authHeaders() })
+      .then(function(res) { if (!res.ok) throw new Error('Failed'); return res.json(); })
+      .then(function(data) {
+        allSessions = data.sessions || [];
+        document.getElementById('candidateBadge').textContent = allSessions.length || '0';
+      })
+      .catch(function(e) { console.error('Load sessions error:', e); });
+  }
 
-        function escapeHtml(str) {
-            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-        }
+  function loadDashboard() {
+    return loadSessions().then(function() { renderDashboard(); });
+  }
 
-        function copyLink() {
-            if (!generatedLink) {
-                alert('No link to copy!');
-                return;
-            }
-            
-            navigator.clipboard.writeText(generatedLink).then(() => {
-                const btn = event.target;
-                const originalText = btn.textContent;
-                btn.textContent = '✅ Copied!';
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                }, 2000);
-            }).catch(err => {
-                console.error('Copy failed:', err);
-                alert('Failed to copy link. Please copy manually.');
-            });
-        }
-    </script>
+  function renderDashboard() {
+    var total = allSessions.length;
+    var completed = allSessions.filter(function(s) { return s.status === 'completed'; });
+    var scored = completed.filter(function(s) { return s.score != null; });
+    var avgScore = scored.length ? (scored.reduce(function(a,b) { return a + b.score; }, 0) / scored.length).toFixed(1) : '\u2014';
+    var strong = completed.filter(function(s) { return s.recommendation === 'Strong Yes'; }).length;
+    var rate = total ? Math.round((completed.length / total) * 100) : 0;
+
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-completed').textContent = completed.length;
+    document.getElementById('stat-avg-score').textContent = avgScore;
+    document.getElementById('stat-strong').textContent = strong;
+    document.getElementById('stat-rate').innerHTML = '<span class="up">' + rate + '%</span> completion rate';
+
+    var recent = allSessions.slice().sort(function(a,b) { return new Date(b.createdAt||0) - new Date(a.createdAt||0); }).slice(0,5);
+    var actEl = document.getElementById('recentActivity');
+    if (!recent.length) {
+      actEl.innerHTML = '<div class="empty-state"><div class="es-icon">\uD83D\uDCED</div><p>No interviews yet &mdash; create your first one!</p></div>';
+    } else {
+      actEl.innerHTML = recent.map(function(s) {
+        var initials = (s.candidateName || '?').split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
+        var score = s.score != null ? s.score + '/10' : '\u2014';
+        var scoreClass = s.score >= 7 ? 'score-high' : s.score >= 5 ? 'score-mid' : s.score != null ? 'score-low' : 'score-na';
+        var time = s.createdAt ? timeAgo(s.createdAt) : '\u2014';
+        return '<div class="activity-item">' +
+          '<div class="activity-avatar" style="background:' + avatarColor(s.candidateName) + '">' + initials + '</div>' +
+          '<div class="activity-info">' +
+            '<div class="activity-name">' + esc(s.candidateName || '\u2014') + '</div>' +
+            '<div class="activity-meta">' + esc(s.candidateEmail || '') + ' &middot; ' + getStatusBadge(s.status) + '</div>' +
+          '</div>' +
+          '<div class="activity-right">' +
+            '<div class="score-ring ' + scoreClass + '">' + score + '</div>' +
+            '<div class="activity-time">' + time + '</div>' +
+          '</div></div>';
+      }).join('');
+    }
+
+    var recs = { 'Strong Yes': 0, 'Yes': 0, 'Maybe': 0, 'No': 0 };
+    completed.forEach(function(s) { if (s.recommendation && recs[s.recommendation] !== undefined) recs[s.recommendation]++; });
+    var recEl = document.getElementById('recBreakdown');
+    if (!completed.length) {
+      recEl.innerHTML = '<div class="empty-state" style="padding:16px 0;"><p>No completed interviews yet</p></div>';
+    } else {
+      recEl.innerHTML = Object.keys(recs).map(function(key) {
+        var val = recs[key];
+        var pct = completed.length ? Math.round((val / completed.length) * 100) : 0;
+        var color = key === 'Strong Yes' ? '#6366f1' : key === 'Yes' ? '#10b981' : key === 'Maybe' ? '#f59e0b' : '#ef4444';
+        return '<div style="margin-bottom:12px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">' +
+            '<span style="font-size:12.5px;font-weight:600;color:var(--text);">' + key + '</span>' +
+            '<span style="font-size:12px;color:var(--muted);">' + val + ' (' + pct + '%)</span>' +
+          '</div>' +
+          '<div class="score-bar-bg"><div class="score-bar-fill" style="width:' + pct + '%;background:' + color + ';"></div></div>' +
+        '</div>';
+      }).join('');
+    }
+  }
+
+  function loadCandidates() {
+    if (!allSessions.length) {
+      return loadSessions().then(function() { renderTable(); });
+    }
+    renderTable();
+    return Promise.resolve();
+  }
+
+  function renderTable() {
+    var q = document.getElementById('searchInput').value.toLowerCase();
+    var rows = allSessions.filter(function(s) {
+      var matchFilter = currentFilter === 'all'
+        || (currentFilter === 'completed' && s.status === 'completed')
+        || (currentFilter === 'created' && s.status === 'created')
+        || (currentFilter === 'ended' && s.status && s.status.indexOf('ended') !== -1);
+      var matchSearch = !q
+        || (s.candidateName || '').toLowerCase().indexOf(q) !== -1
+        || (s.candidateEmail || '').toLowerCase().indexOf(q) !== -1;
+      return matchFilter && matchSearch;
+    });
+
+    rows.sort(function(a, b) {
+      var va = a[sortKey], vb = b[sortKey];
+      if (sortKey === 'score') { va = va != null ? va : -1; vb = vb != null ? vb : -1; }
+      if (va < vb) return sortDir;
+      if (va > vb) return -sortDir;
+      return 0;
+    });
+
+    var tbody = document.getElementById('candidatesBody');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="es-icon">\uD83D\uDD0D</div><p>No candidates match your filter.</p></div></td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = rows.map(function(s) {
+      var initials = (s.candidateName || '?').split(' ').map(function(w) { return w[0]; }).join('').slice(0,2).toUpperCase();
+      var score = s.score != null ? s.score : null;
+      var scoreClass = score >= 7 ? 'score-high' : score >= 5 ? 'score-mid' : score != null ? 'score-low' : 'score-na';
+      var scoreDisplay = score != null ? score + '/10' : '\u2014';
+      var rec = s.recommendation ? '<span class="rec-badge ' + recClass(s.recommendation) + '">' + esc(s.recommendation) + '</span>' : '<span style="color:var(--muted)">\u2014</span>';
+      var rowId = 'row-' + s.interviewId;
+      var detailId = 'detail-' + s.interviewId;
+      return '<tr id="' + rowId + '" onclick="toggleDetail(\'' + s.interviewId + '\')">' +
+        '<td><div class="candidate-cell"><div class="cand-avatar" style="background:' + avatarColor(s.candidateName) + '">' + initials + '</div>' +
+        '<div><div class="cand-name">' + esc(s.candidateName || '\u2014') + '</div><div class="cand-email">' + esc(s.candidateEmail || '') + '</div></div></div></td>' +
+        '<td>' + getStatusBadge(s.status) + '</td>' +
+        '<td style="color:var(--muted);white-space:nowrap;">' + (s.createdAt ? formatDate(s.createdAt) : '\u2014') + '</td>' +
+        '<td><span class="score-ring ' + scoreClass + '" style="width:36px;height:36px;font-size:12px;">' + scoreDisplay + '</span></td>' +
+        '<td>' + rec + '</td>' +
+        '<td style="color:var(--muted);font-size:18px;text-align:center;">&rsaquo;</td>' +
+        '</tr>' +
+        '<tr class="detail-row" id="' + detailId + '"><td colspan="6"><div class="detail-panel-inner">' + buildDetailPanel(s) + '</div></td></tr>';
+    }).join('');
+  }
+
+  function buildDetailPanel(s) {
+    var strengths = (s.strengths || []).map(function(x) { return '<span class="chip chip-green">\u2713 ' + esc(x) + '</span>'; }).join('');
+    var concerns  = (s.concerns  || []).map(function(x) { return '<span class="chip chip-red">\u26A0 '  + esc(x) + '</span>'; }).join('');
+    var convo = s.conversation || [];
+    var transcript = convo.map(function(t) {
+      return '<div class="t-turn"><div class="t-q">Q' + t.turn + ': ' + esc(t.question || '') + '</div><div class="t-a">' + esc(t.candidateAnswer || '\u2014') + '</div></div>';
+    }).join('');
+    var score = s.score != null ? s.score : null;
+    var scorePct = score != null ? (score / 10) * 100 : 0;
+    var barColor = score >= 7 ? '#10b981' : score >= 5 ? '#f59e0b' : score != null ? '#ef4444' : '#d1d5db';
+    return '<div class="detail-grid">' +
+      '<div>' +
+        (s.summary ? '<div class="detail-section-title">AI Summary</div><p class="summary-text" style="margin-bottom:16px;">' + esc(s.summary) + '</p>' : '') +
+        (score != null ? '<div class="detail-section-title">Score</div><div class="score-bar-wrap" style="margin-bottom:16px;"><div class="score-bar-bg"><div class="score-bar-fill" style="width:' + scorePct + '%;background:' + barColor + ';"></div></div><div class="score-bar-label">' + score + '/10</div></div>' : '') +
+        (strengths ? '<div class="detail-section-title">Strengths</div><div class="chip-list" style="margin-bottom:14px;">' + strengths + '</div>' : '') +
+        (concerns  ? '<div class="detail-section-title">Concerns</div><div class="chip-list">' + concerns + '</div>' : '') +
+        (!s.summary && !strengths ? '<p style="color:var(--muted);font-size:13px;">AI analysis available for completed interviews.</p>' : '') +
+      '</div>' +
+      '<div>' +
+        (transcript ? '<div class="detail-section-title">Transcript (' + convo.length + ' turns)</div><div class="transcript-list">' + transcript + '</div>' : '<p style="color:var(--muted);font-size:13px;">No transcript available.</p>') +
+      '</div>' +
+    '</div>';
+  }
+
+  function toggleDetail(id) {
+    var detailRow = document.getElementById('detail-' + id);
+    var mainRow   = document.getElementById('row-' + id);
+    var isOpen = detailRow.classList.contains('open');
+    if (expandedRow && expandedRow !== id) {
+      var prev = document.getElementById('detail-' + expandedRow);
+      var prevMain = document.getElementById('row-' + expandedRow);
+      if (prev) prev.classList.remove('open');
+      if (prevMain) prevMain.classList.remove('expanded');
+    }
+    detailRow.classList.toggle('open', !isOpen);
+    mainRow.classList.toggle('expanded', !isOpen);
+    expandedRow = isOpen ? null : id;
+  }
+
+  function setFilter(el) {
+    currentFilter = el.dataset.filter;
+    document.querySelectorAll('.filter-tab').forEach(function(t) { t.classList.toggle('active', t === el); });
+    renderTable();
+  }
+
+  function filterTable() { renderTable(); }
+
+  function sortTable(key) {
+    if (sortKey === key) sortDir *= -1;
+    else { sortKey = key; sortDir = -1; }
+    renderTable();
+  }
+
+  // Create interview
+  var generatedLink = '';
+
+  document.getElementById('createForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var btn = document.getElementById('submitBtn');
+    var btnText = document.getElementById('submitBtnText');
+    var errDiv  = document.getElementById('createError');
+    errDiv.classList.remove('show');
+    document.getElementById('linkResult').classList.remove('show');
+    btn.disabled = true;
+    btnText.textContent = 'Creating\u2026';
+
+    var data = {
+      candidateName:  document.getElementById('candidateName').value.trim(),
+      candidateEmail: document.getElementById('candidateEmail').value.trim(),
+      recruiterEmail: document.getElementById('recruiterEmail').value.trim(),
+      jobDescription: document.getElementById('jobDescription').value.trim() || undefined,
+    };
+
+    fetch(BACKEND_URL + '/interview/create', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+      body: JSON.stringify(data),
+    })
+    .then(function(res) {
+      if (!res.ok) return res.json().then(function(e) { throw new Error(e.error || 'Failed'); });
+      return res.json();
+    })
+    .then(function(result) {
+      generatedLink = result.interviewLink;
+      document.getElementById('linkDisplay').textContent = generatedLink;
+      document.getElementById('linkCandidateName').textContent = data.candidateName;
+      document.getElementById('linkResult').classList.add('show');
+      recentlyCreated.unshift({ name: data.candidateName, link: generatedLink, time: new Date() });
+      if (recentlyCreated.length > 4) recentlyCreated.pop();
+      renderRecentLinks();
+      document.getElementById('candidateName').value = '';
+      document.getElementById('candidateEmail').value = '';
+      document.getElementById('jobDescription').value = '';
+      showToast('Interview link created for ' + data.candidateName);
+      loadSessions();
+    })
+    .catch(function(err) {
+      errDiv.textContent = '\u274C ' + err.message;
+      errDiv.classList.add('show');
+      showToast(err.message, 'error');
+    })
+    .finally(function() {
+      btn.disabled = false;
+      btnText.textContent = 'Generate Interview Link';
+    });
+  });
+
+  function copyLink() {
+    if (!generatedLink) return;
+    navigator.clipboard.writeText(generatedLink)
+      .then(function() { showToast('Link copied to clipboard!'); })
+      .catch(function() { showToast('Could not copy \u2014 please copy manually.', 'error'); });
+  }
+
+  function renderRecentLinks() {
+    if (!recentlyCreated.length) return;
+    document.getElementById('recentLinksCard').style.display = '';
+    document.getElementById('recentLinksList').innerHTML = recentlyCreated.map(function(r, i) {
+      return '<div class="recent-link-item">' +
+        '<div class="recent-link-icon">\uD83D\uDC64</div>' +
+        '<div><div class="recent-link-name">' + esc(r.name) + '</div><div class="recent-link-time">' + timeAgo(r.time) + '</div></div>' +
+        '<button class="recent-link-copy" onclick="copySpecific(' + i + ')" title="Copy link">\uD83D\uDCCB</button>' +
+      '</div>';
+    }).join('');
+  }
+
+  function copySpecific(i) {
+    var link = recentlyCreated[i] && recentlyCreated[i].link;
+    if (link) navigator.clipboard.writeText(link).then(function() { showToast('Copied!'); }).catch(function(){});
+  }
+
+  // Helpers
+  function esc(str) {
+    return String(str == null ? '' : str)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function getStatusBadge(status) {
+    if (status === 'completed')    return '<span class="badge badge-completed">Completed</span>';
+    if (status === 'created')      return '<span class="badge badge-created">Not Started</span>';
+    if (status && status.indexOf('ended') !== -1) return '<span class="badge badge-ended">Ended Early</span>';
+    if (status === 'disconnected') return '<span class="badge badge-disconnected">Disconnected</span>';
+    return '<span class="badge" style="background:#f3f4f6;color:var(--muted);">' + esc(status || 'Unknown') + '</span>';
+  }
+
+  function recClass(rec) {
+    if (rec === 'Strong Yes') return 'rec-strong';
+    if (rec === 'Yes')        return 'rec-yes';
+    if (rec === 'Maybe')      return 'rec-maybe';
+    if (rec === 'No')         return 'rec-no';
+    return '';
+  }
+
+  function avatarColor(name) {
+    var colors = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#14b8a6','#f43f5e'];
+    var h = 0;
+    for (var i = 0; i < (name||'').length; i++) h = ((h * 31) + (name||'').charCodeAt(i)) | 0;
+    return colors[Math.abs(h) % colors.length];
+  }
+
+  function timeAgo(dateStr) {
+    var diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+    if (diff < 60)    return 'just now';
+    if (diff < 3600)  return Math.floor(diff/60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+    if (diff < 604800) return Math.floor(diff/86400) + 'd ago';
+    return formatDate(dateStr);
+  }
+
+  function formatDate(dateStr) {
+    return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+
+  // Boot
+  loadDashboard();
+</script>
 </body>
 </html>
