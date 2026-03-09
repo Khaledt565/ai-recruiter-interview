@@ -14,12 +14,13 @@ class InterviewApp {
     this.interviewId = null;
 
     // Configuration - Dynamic Backend URL
+    // Production: Use API Gateway HTTPS endpoint that proxies to backend
+    // Local: Use localhost HTTP
     const backendHost = window.location.hostname === 'localhost' 
       ? 'localhost:8080' 
-      : '3.68.77.52:8080';
+      : 'l05uyc9rza.execute-api.eu-central-1.amazonaws.com/prod';
     
-    // Use HTTP for backend (internal AWS communication)
-    const backendProtocol = 'http';
+    const backendProtocol = window.location.hostname === 'localhost' ? 'http' : 'https';
     
     this.config = {
       backendHttpUrl: `${backendProtocol}://${backendHost}/interview/process`,  // ✅ CORRECT!

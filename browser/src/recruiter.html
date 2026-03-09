@@ -195,12 +195,12 @@
     </div>
 
     <script>
-        // Dynamic backend URL - localhost for local testing, Fargate IP for production via CloudFront
+        // Dynamic backend URL - localhost for local testing, API Gateway for production via CloudFront
         const backendHost = window.location.hostname === 'localhost' 
             ? 'localhost:8080' 
-            : '3.68.77.52:8080';
-        // Use HTTP for backend (internal AWS communication)
-        const backendProtocol = 'http';
+            : 'l05uyc9rza.execute-api.eu-central-1.amazonaws.com/prod';
+        // Production: use HTTPS via API Gateway, Local: use HTTP
+        const backendProtocol = window.location.hostname === 'localhost' ? 'http' : 'https';
         const BACKEND_URL = `${backendProtocol}://${backendHost}`;
         let generatedLink = '';
 
