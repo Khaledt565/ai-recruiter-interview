@@ -199,7 +199,7 @@
         const backendHost = window.location.hostname === 'localhost' 
             ? 'localhost:8080' 
             : '3.73.83.209:8080';
-        // HTTP for local testing (self-signed certs don't work in browser fetch), HTTPS for production
+        // HTTPS for production, HTTP for local
         const backendProtocol = window.location.hostname === 'localhost' ? 'http' : 'https';
         const BACKEND_URL = `${backendProtocol}://${backendHost}`;
         let generatedLink = '';
