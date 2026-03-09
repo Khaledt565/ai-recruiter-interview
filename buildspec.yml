@@ -14,16 +14,16 @@ phases:
     commands:
       - echo Build started at $(date)
       - echo Building the Docker image...
-      - docker build -t $IMAGE_URI backend/
-      - docker tag $IMAGE_URI $LATEST_URI
+      - docker build -t ${IMAGE_URI} backend/
+      - docker tag ${IMAGE_URI} ${LATEST_URI}
       
   post_build:
     commands:
       - echo Build completed at $(date)
       - echo Pushing the Docker images...
-      - docker push $IMAGE_URI
-      - docker push $LATEST_URI
-      - printf '[{"name":"ai-recruiter-backend","imageUri":"%s"}]' $LATEST_URI > imagedefinitions.json
+      - docker push ${IMAGE_URI}
+      - docker push ${LATEST_URI}
+      - printf '[{"name":"ai-recruiter-backend","imageUri":"%s"}]' ${LATEST_URI} > imagedefinitions.json
       - cat imagedefinitions.json
 
 artifacts:
