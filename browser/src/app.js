@@ -16,13 +16,13 @@ class InterviewApp {
     // Configuration - Dynamic Backend URL
     const backendHost = window.location.hostname === 'localhost' 
       ? 'localhost:8080' 
-      : '18.196.201.216:8080';
+      : '18.185.172.133:8080';
     
     // HTTPS for production, HTTP for local
     const backendProtocol = window.location.hostname === 'localhost' ? 'http' : 'https';
     
     this.config = {
-      backendHttpUrl: `${backendProtocol}://${backendHost}/interview/create`,
+      backendHttpUrl: `${backendProtocol}://${backendHost}/interview/process`,  // ✅ CORRECT!
       backendBaseUrl: `${backendProtocol}://${backendHost}`,
       cognitoIdentityPoolId: 'eu-central-1:1f7604b2-8a28-44ad-b470-b4ae2b46d758',
       region: 'eu-central-1',
