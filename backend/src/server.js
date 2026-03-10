@@ -10,6 +10,7 @@ import { WebSocketServer } from 'ws';
 import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
+import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { processTranscript, QUESTIONS, generateCandidateSummary } from './interview-engine.js';
@@ -30,6 +31,8 @@ const COGNITO_USER_POOL_ID = process.env.COGNITO_USER_POOL_ID || 'eu-central-1_J
 const polly = new PollyClient({ region: REGION });
 const s3 = new S3Client({ region: REGION });
 const ses = new SESClient({ region: REGION });
+const bedrock = new BedrockRuntimeClient({ region: REGION });
+const BEDROCK_MODEL_ID = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-haiku-20240307-v1:0';
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }));
 
 const SES_FROM_EMAIL = process.env.SES_FROM_EMAIL || '';
