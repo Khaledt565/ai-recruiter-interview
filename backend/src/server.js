@@ -10,10 +10,10 @@ import { WebSocketServer } from 'ws';
 import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
-import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
-import { processTranscript, QUESTIONS, generateCandidateSummary } from './interview-engine.js';
+import { processTranscript, generateCandidateSummary } from './interview-engine.js';
+import { suggestQuestionsFromCV } from './bedrock-client.js';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
@@ -31,8 +31,6 @@ const COGNITO_USER_POOL_ID = process.env.COGNITO_USER_POOL_ID || 'eu-central-1_J
 const polly = new PollyClient({ region: REGION });
 const s3 = new S3Client({ region: REGION });
 const ses = new SESClient({ region: REGION });
-const bedrock = new BedrockRuntimeClient({ region: REGION });
-const BEDROCK_MODEL_ID = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-haiku-20240307-v1:0';
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }));
 
 const SES_FROM_EMAIL = process.env.SES_FROM_EMAIL || '';
@@ -115,7 +113,7 @@ async function saveInterviewSnapshot(meetingId, attendeeId, status) {
       startedAt: state.startedAt || null,
       createdAt: meta.createdAt || null,
       questionsAnswered: state.qIndex || 0,
-      totalQuestions: (state.questions || QUESTIONS).length,
+      totalQuestions: (state.questions || []).length,
       completed: state.done || false,
       jobDescription: state.jobDescription || meta.jobDescription || null,
       aiSummary,
@@ -278,28 +276,8 @@ app.post('/interview/suggest-questions', requireAuth, async (req, res) => {
     if (!text || typeof text !== 'string' || text.trim().length < 20) {
       return res.status(400).json({ error: 'Please provide more CV/JD text to generate questions from.' });
     }
-    const body = {
-      anthropic_version: 'bedrock-2023-05-31',
-      max_tokens: 600,
-      temperature: 0.4,
-      messages: [{
-        role: 'user',
-        content: `Based on this CV or job description, generate exactly 3 targeted interview questions that probe the candidate's specific experience and suitability for the role.\n\n${text.slice(0, 4000)}\n\nRules:\n- Each question must be short (1-2 sentences), conversational, and suitable for a voice interview\n- Focus on specific skills, experience, or notable aspects visible in the CV/JD\n- Do NOT include a generic greeting or icebreaker\n- Return ONLY a JSON array of exactly 3 strings, no other text`,
-      }],
-    };
-    const resp = await bedrock.send(new InvokeModelCommand({
-      modelId: BEDROCK_MODEL_ID,
-      contentType: 'application/json',
-      accept: 'application/json',
-      body: JSON.stringify(body),
-    }));
-    const raw = Buffer.from(resp.body).toString('utf-8');
-    const parsed = JSON.parse(raw);
-    const rawText = parsed?.content?.find(c => c.type === 'text')?.text?.trim() || '[]';
-    const cleaned = rawText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
-    const questions = JSON.parse(cleaned);
-    if (!Array.isArray(questions) || !questions.length) throw new Error('Invalid response format');
-    res.json({ questions: questions.slice(0, 3) });
+    const questions = await suggestQuestionsFromCV(text);
+    res.json({ questions });
   } catch (err) {
     console.error('Error suggesting questions:', err.message);
     res.status(500).json({ error: 'Failed to generate questions. Please try again.' });
