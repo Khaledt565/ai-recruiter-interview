@@ -994,9 +994,14 @@
       }
     });
 
+    function showSuggestBtn() {
+      var btn = document.getElementById('suggestQBtn');
+      if (btn) btn.style.display = '';
+    }
+
     function extractTXT(file) {
       var reader = new FileReader();
-      reader.onload = function(e) { jdArea.value = e.target.result; setStatus('\u2705 Text imported from ' + file.name, true); };
+      reader.onload = function(e) { jdArea.value = e.target.result; setStatus('\u2705 Text imported from ' + file.name, true); showSuggestBtn(); };
       reader.onerror = function() { setStatus('Failed to read file.', false); };
       reader.readAsText(file);
     }
@@ -1020,6 +1025,7 @@
             return Promise.all(promises).then(function(texts) {
               jdArea.value = texts.join('\n\n');
               setStatus('\u2705 Extracted ' + pdf.numPages + ' page' + (pdf.numPages !== 1 ? 's' : '') + ' from ' + file.name, true);
+              showSuggestBtn();
             });
           })
           .catch(function() { setStatus('Failed to extract PDF text. The PDF may be image-based.', false); });
@@ -1038,6 +1044,7 @@
           .then(function(result) {
             jdArea.value = result.value;
             setStatus('\u2705 Text imported from ' + file.name, true);
+            showSuggestBtn();
           })
           .catch(function() { setStatus('Failed to extract Word document text.', false); });
       };
