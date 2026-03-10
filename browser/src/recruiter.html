@@ -237,6 +237,14 @@
     .custom-q-remove:hover { border-color: #ef4444; color: #ef4444; }
     .add-q-btn { display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px dashed var(--border); background: transparent; color: var(--muted); transition: all 0.15s; }
     .add-q-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .suggest-q-btn { margin-top: 8px; padding: 7px 14px; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer; border: none; background: linear-gradient(135deg,#6366f1,#a855f7); color: #fff; transition: opacity 0.15s; }
+    .suggest-q-btn:hover { opacity: 0.88; }
+    .suggest-q-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .suggestion-card { display: flex; align-items: flex-start; gap: 10px; background: var(--surface); border: 1.5px solid var(--border); border-radius: 9px; padding: 10px 12px; margin-bottom: 7px; }
+    .suggestion-text { flex: 1; font-size: 13px; color: var(--text); line-height: 1.5; }
+    .suggestion-add-btn { flex-shrink: 0; padding: 4px 10px; border-radius: 6px; border: 1.5px solid var(--accent); background: transparent; color: var(--accent); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .suggestion-add-btn:hover { background: var(--accent); color: #fff; }
+    .suggestion-add-btn.added { background: #10b981; border-color: #10b981; color: #fff; cursor: default; }
   </style>
 </head>
 <body>
@@ -433,13 +441,13 @@
               </div>
               <div class="cv-drop-hint">&#8593; Drag &amp; drop a CV or job description file &mdash; PDF, DOCX, or TXT</div>
               <div class="cv-status" id="cvStatus"></div>
+              <button type="button" class="suggest-q-btn" id="suggestQBtn" onclick="suggestQuestions()" style="display:none;">&#10024; Suggest interview questions from this CV/JD</button>
+              <div id="suggestionsPanel" style="display:none;margin-top:10px;"></div>
             </div>
-            <button type="button" class="custom-q-toggle" id="customQToggle" onclick="toggleCustomQ()">&#43; Add custom questions <span style="font-weight:400;color:var(--muted)">(optional &#8212; replaces AI questions)</span></button>
-            <div class="form-group" id="customQSection" style="display:none;">
-              <label class="form-label">Custom Questions <span class="form-hint">&#8212; up to 5, asked in order</span></label>
+            <div class="form-group">
+              <label class="form-label">Interview Questions <span class="form-hint">&#8212; asked in order (up to 10). If none added, AI auto-generates from CV/JD.</span></label>
               <div class="custom-q-list" id="customQList"></div>
-              <button type="button" class="add-q-btn" id="addQBtn" onclick="addCustomQuestion()">&#43; Add a question</button>
-              <p style="font-size:11.5px;color:var(--muted);margin-top:7px;">Tip: start with a greeting as question&nbsp;1. If provided, these replace AI-generated questions.</p>
+              <button type="button" class="add-q-btn" id="addQBtn" onclick="addCustomQuestion()">&#43; Add a question manually</button>
             </div>
             <div class="inline-error" id="createError"></div>
             <button type="submit" class="submit-btn" id="submitBtn">
@@ -813,8 +821,8 @@
       document.getElementById('candidateEmail').value = '';
       document.getElementById('jobDescription').value = '';
       document.getElementById('customQList').innerHTML = '';
-      document.getElementById('customQSection').style.display = 'none';
-      document.getElementById('customQToggle').innerHTML = '\u002B Add custom questions <span style="font-weight:400;color:var(--muted)">(optional \u2014 replaces AI questions)</span>';
+      document.getElementById('suggestionsPanel').style.display = 'none';
+      document.getElementById('suggestQBtn').style.display = 'none';
       document.getElementById('addQBtn').style.display = '';
       showToast('Interview link created for ' + data.candidateName);
       loadSessions();
@@ -1081,27 +1089,73 @@
       .catch(function() { showToast('Could not copy link', 'error'); });
   }
 
-  // ── Custom questions ─────────────────────────────────────────────────────────
-  function toggleCustomQ() {
-    var section = document.getElementById('customQSection');
-    var isOpen = section.style.display !== 'none';
-    section.style.display = isOpen ? 'none' : '';
-    document.getElementById('customQToggle').innerHTML = isOpen
-      ? '\u002B Add custom questions <span style="font-weight:400;color:var(--muted)">(optional \u2014 replaces AI questions)</span>'
-      : '\u2212 Hide custom questions';
-    if (!isOpen && document.querySelectorAll('.custom-q-textarea').length === 0) addCustomQuestion();
+  // Show suggest button when CV/JD textarea has content
+  document.getElementById('jobDescription').addEventListener('input', function() {
+    var btn = document.getElementById('suggestQBtn');
+    btn.style.display = this.value.trim().length >= 20 ? '' : 'none';
+  });
+
+  // ── Suggest questions from CV/JD ─────────────────────────────────────────────
+  function suggestQuestions() {
+    var text = document.getElementById('jobDescription').value.trim();
+    if (!text || text.length < 20) return;
+    var btn = document.getElementById('suggestQBtn');
+    var panel = document.getElementById('suggestionsPanel');
+    btn.disabled = true;
+    btn.textContent = '⏳ Generating questions…';
+    panel.style.display = 'none';
+    fetch(BACKEND_URL + '/interview/suggest-questions', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+      body: JSON.stringify({ text: text }),
+    })
+    .then(function(res) {
+      if (!res.ok) return res.json().then(function(e) { throw new Error(e.error || 'Failed'); });
+      return res.json();
+    })
+    .then(function(data) {
+      var questions = data.questions || [];
+      if (!questions.length) { showToast('No questions generated — try adding more CV/JD detail', 'error'); return; }
+      panel.innerHTML = '<p style="font-size:12px;color:var(--muted);margin:0 0 8px;">&#10024; AI suggested questions — click <strong>Add</strong> to include in the interview:</p>' +
+        questions.map(function(q, i) {
+          return '<div class="suggestion-card" id="scard-' + i + '">' +
+            '<div class="suggestion-text">' + esc(q) + '</div>' +
+            '<button type="button" class="suggestion-add-btn" onclick="addSuggestedQuestion(' + i + ', ' + JSON.stringify(q) + ')">+ Add</button>' +
+          '</div>';
+        }).join('');
+      panel.style.display = '';
+    })
+    .catch(function(err) { showToast(err.message, 'error'); })
+    .finally(function() {
+      btn.disabled = false;
+      btn.textContent = '\u2728 Suggest interview questions from this CV/JD';
+    });
   }
 
+  function addSuggestedQuestion(index, text) {
+    var addBtn = document.querySelector('#scard-' + index + ' .suggestion-add-btn');
+    if (addBtn && addBtn.classList.contains('added')) return;
+    addQuestionToList(text);
+    if (addBtn) { addBtn.textContent = '\u2713 Added'; addBtn.classList.add('added'); }
+  }
+
+  // ── Custom questions ─────────────────────────────────────────────────────────
   function addCustomQuestion() {
+    addQuestionToList('');
+  }
+
+  function addQuestionToList(prefill) {
     var list = document.getElementById('customQList');
-    if (list.querySelectorAll('.custom-q-item').length >= 5) { showToast('Maximum 5 questions', 'error'); return; }
+    if (list.querySelectorAll('.custom-q-item').length >= 10) { showToast('Maximum 10 questions', 'error'); return; }
     var div = document.createElement('div');
     div.className = 'custom-q-item';
     div.innerHTML = '<textarea class="form-input custom-q-textarea" rows="2" placeholder="E.g. Can you walk me through your background in\u2026"></textarea>' +
       '<button type="button" class="custom-q-remove" onclick="onRemoveQ(this)">&#215;</button>';
     list.appendChild(div);
-    div.querySelector('textarea').focus();
-    if (list.querySelectorAll('.custom-q-item').length >= 5) document.getElementById('addQBtn').style.display = 'none';
+    var ta = div.querySelector('textarea');
+    if (prefill) ta.value = prefill;
+    ta.focus();
+    if (list.querySelectorAll('.custom-q-item').length >= 10) document.getElementById('addQBtn').style.display = 'none';
   }
 
   function onRemoveQ(btn) {

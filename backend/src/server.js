@@ -268,6 +268,41 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Suggest interview questions from CV/JD text
+app.post('/interview/suggest-questions', requireAuth, async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text || typeof text !== 'string' || text.trim().length < 20) {
+      return res.status(400).json({ error: 'Please provide more CV/JD text to generate questions from.' });
+    }
+    const body = {
+      anthropic_version: 'bedrock-2023-05-31',
+      max_tokens: 600,
+      temperature: 0.4,
+      messages: [{
+        role: 'user',
+        content: `Based on this CV or job description, generate exactly 3 targeted interview questions that probe the candidate's specific experience and suitability for the role.\n\n${text.slice(0, 4000)}\n\nRules:\n- Each question must be short (1-2 sentences), conversational, and suitable for a voice interview\n- Focus on specific skills, experience, or notable aspects visible in the CV/JD\n- Do NOT include a generic greeting or icebreaker\n- Return ONLY a JSON array of exactly 3 strings, no other text`,
+      }],
+    };
+    const resp = await bedrock.send(new InvokeModelCommand({
+      modelId: BEDROCK_MODEL_ID,
+      contentType: 'application/json',
+      accept: 'application/json',
+      body: JSON.stringify(body),
+    }));
+    const raw = Buffer.from(resp.body).toString('utf-8');
+    const parsed = JSON.parse(raw);
+    const rawText = parsed?.content?.find(c => c.type === 'text')?.text?.trim() || '[]';
+    const cleaned = rawText.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+    const questions = JSON.parse(cleaned);
+    if (!Array.isArray(questions) || !questions.length) throw new Error('Invalid response format');
+    res.json({ questions: questions.slice(0, 3) });
+  } catch (err) {
+    console.error('Error suggesting questions:', err.message);
+    res.status(500).json({ error: 'Failed to generate questions. Please try again.' });
+  }
+});
+
 // NEW: Create interview link
 app.post('/interview/create', requireAuth, async (req, res) => {
   try {
@@ -275,7 +310,7 @@ app.post('/interview/create', requireAuth, async (req, res) => {
     const candidateEmail = (req.body.candidateEmail || '').toLowerCase().trim();
     const recruiterEmail = (req.body.recruiterEmail || '').toLowerCase().trim();
     const validCustomQ = Array.isArray(customQuestions) && customQuestions.length
-      ? customQuestions.filter(q => typeof q === 'string' && q.trim()).slice(0, 5).map(q => q.trim())
+      ? customQuestions.filter(q => typeof q === 'string' && q.trim()).slice(0, 10).map(q => q.trim())
       : null;
 
     if (!candidateName || !candidateEmail || !recruiterEmail) {

@@ -181,6 +181,9 @@ export async function processTranscript({ meetingId, attendeeId, transcriptText,
       console.log("Generating JD-specific questions...");
       state.questions = await generateQuestionsFromJD(jobDescription, candidateName || "the candidate");
       state.jobDescription = jobDescription;
+    } else {
+      console.log("No CV/JD provided, generating generic questions...");
+      state.questions = await generateQuestionsFromJD('General professional role — assess motivation, experience, work style, strengths, and salary expectations', candidateName || "the candidate");
     }
     await saveState(meetingId, attendeeId, state);
     const questions = state.questions || QUESTIONS;
