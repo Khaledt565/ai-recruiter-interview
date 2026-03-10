@@ -19,6 +19,7 @@ function parseBedrockResponse(resp) {
 
 // Decide how to respond to a candidate's answer
 export async function callBedrockPolicy({ userText, currentQuestion }) {
+  console.log(`[Bedrock] callBedrockPolicy — question: "${currentQuestion.slice(0, 60)}…", answer: "${userText.slice(0, 60)}${userText.length > 60 ? '…' : ''}"`); 
   const body = {
     anthropic_version: "bedrock-2023-05-31",
     max_tokens: 220,
@@ -35,11 +36,14 @@ export async function callBedrockPolicy({ userText, currentQuestion }) {
     accept: "application/json",
     body: JSON.stringify(body),
   }));
-  return JSON.parse(parseBedrockResponse(resp) || "{}");
+  const result = JSON.parse(parseBedrockResponse(resp) || "{}");
+  console.log(`[Bedrock] callBedrockPolicy — result: action=${result.action}, advance=${result.advance}`);
+  return result;
 }
 
 // Generate 3 middle interview questions from a job description (greeting and closing are always fixed by the engine)
 export async function generateQuestionsFromJD(jobDescription, candidateName) {
+  console.log(`[Bedrock] generateQuestionsFromJD — candidate: "${candidateName}", JD length: ${jobDescription.length} chars`);
   try {
     const body = {
       anthropic_version: "bedrock-2023-05-31",
@@ -58,15 +62,20 @@ export async function generateQuestionsFromJD(jobDescription, candidateName) {
     }));
     const text = extractJsonText(parseBedrockResponse(resp) || "[]");
     const questions = JSON.parse(text);
-    if (Array.isArray(questions) && questions.length >= 1) return questions;
+    if (Array.isArray(questions) && questions.length >= 1) {
+      console.log(`[Bedrock] generateQuestionsFromJD — generated ${questions.length} question(s)`);
+      return questions;
+    }
+    console.warn(`[Bedrock] generateQuestionsFromJD — unexpected response shape`);
   } catch (err) {
-    console.error("Failed to generate dynamic questions:", err.message);
+    console.error(`[Bedrock] generateQuestionsFromJD — failed:`, err.message);
   }
   return null;
 }
 
 // Generate 3 suggested questions from a CV/JD for the recruiter to pick from
 export async function suggestQuestionsFromCV(text) {
+  console.log(`[Bedrock] suggestQuestionsFromCV — input length: ${text.length} chars`);
   const body = {
     anthropic_version: "bedrock-2023-05-31",
     max_tokens: 600,
@@ -85,12 +94,14 @@ export async function suggestQuestionsFromCV(text) {
   const cleaned = extractJsonText(parseBedrockResponse(resp) || "[]");
   const questions = JSON.parse(cleaned);
   if (!Array.isArray(questions) || !questions.length) throw new Error("Invalid response format");
+  console.log(`[Bedrock] suggestQuestionsFromCV — returning ${Math.min(questions.length, 3)} suggestion(s)`);
   return questions.slice(0, 3);
 }
 
 // Generate an AI assessment after the interview completes
 export async function generateCandidateSummary(history, candidateName, jobDescription) {
   if (!history || history.length === 0) return null;
+  console.log(`[Bedrock] generateCandidateSummary — candidate: "${candidateName}", ${history.length} turn(s), hasJD: ${!!jobDescription}`);
   const transcript = history.map((h, i) => `Q${i + 1}: ${h.q}\nCandidate: ${h.a}`).join("\n\n");
   const jobContext = jobDescription ? `Job Description:\n${jobDescription}\n\n` : "";
   const body = {
@@ -109,5 +120,7 @@ export async function generateCandidateSummary(history, candidateName, jobDescri
     body: JSON.stringify(body),
   }));
   const text = extractJsonText(parseBedrockResponse(resp) || "{}");
-  return JSON.parse(text);
+  const summary = JSON.parse(text);
+  console.log(`[Bedrock] generateCandidateSummary — recommendation: ${summary.recommendation}, score: ${summary.score}/10`);
+  return summary;
 }
