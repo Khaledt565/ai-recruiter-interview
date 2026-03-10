@@ -7,7 +7,6 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "LOG_LEVEL=DEBUG nodemon src/server.js",
-    "lambda": "node src/lambda.js",
     "test": "vitest run",
     "test:watch": "vitest watch",
     "test:ui": "vitest --ui",
@@ -15,7 +14,6 @@
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.515.0",
-    "@aws-sdk/client-cognito-identity": "^3.1004.0",
     "@aws-sdk/client-dynamodb": "^3.515.0",
     "@aws-sdk/client-polly": "^3.515.0",
     "@aws-sdk/client-s3": "^3.515.0",

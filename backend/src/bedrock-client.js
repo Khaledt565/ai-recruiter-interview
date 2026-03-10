@@ -2,7 +2,7 @@
 // All AWS Bedrock / Claude AI calls — knows nothing about sessions or HTTP
 
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
-import { SYSTEM_PROMPT, BEDROCK_MODEL_ID, CLOSING } from "./prompts.js";
+import { SYSTEM_PROMPT, BEDROCK_MODEL_ID } from "./prompts.js";
 
 const REGION = process.env.AWS_REGION || "eu-central-1";
 const bedrock = new BedrockRuntimeClient({ region: REGION });
