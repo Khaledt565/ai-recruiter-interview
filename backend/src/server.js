@@ -255,7 +255,10 @@ app.get('/health', (req, res) => {
 // NEW: Create interview link
 app.post('/interview/create', requireAuth, async (req, res) => {
   try {
-    const { candidateName, candidateEmail, recruiterEmail, jobDescription } = req.body;
+    const { candidateName, candidateEmail, recruiterEmail, jobDescription, customQuestions } = req.body;
+    const validCustomQ = Array.isArray(customQuestions) && customQuestions.length
+      ? customQuestions.filter(q => typeof q === 'string' && q.trim()).slice(0, 5).map(q => q.trim())
+      : null;
 
     if (!candidateName || !candidateEmail || !recruiterEmail) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -276,6 +279,7 @@ app.post('/interview/create', requireAuth, async (req, res) => {
           candidateEmail,
           recruiterEmail,
           jobDescription: jobDescription || null,
+          customQuestions: validCustomQ || null,
           status: 'created',
           createdAt: new Date().toISOString(),
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -380,7 +384,7 @@ app.get('/interview/sessions', requireAuth, async (req, res) => {
       ExpressionAttributeValues: { ':email': recruiterEmail, ':meta': 'META' },
     }));
     const sessions = (result.Items || [])
-      .filter(item => item.pk && item.pk.startsWith('INTERVIEW#'))
+      .filter(item => item.pk && item.pk.startsWith('INTERVIEW#') && !item.archived)
       .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
       .map(item => ({
         interviewId: item.interviewId,
@@ -391,11 +395,83 @@ app.get('/interview/sessions', requireAuth, async (req, res) => {
         score: item.aiScore || null,
         recommendation: item.aiRecommendation || null,
         summary: item.aiSummary || null,
+        expiresAt: item.expiresAt || null,
       }));
     res.json({ sessions });
   } catch (error) {
     console.error('Error listing sessions:', error);
     res.status(500).json({ error: 'Failed to list sessions' });
+  }
+});
+
+// Archive (soft-delete) an interview
+app.delete('/interview/:interviewId', requireAuth, async (req, res) => {
+  try {
+    const { interviewId } = req.params;
+    if (!interviewId || typeof interviewId !== 'string' || interviewId.length > 100) {
+      return res.status(400).json({ error: 'Invalid interview ID' });
+    }
+    const itemRes = await ddb.send(new GetCommand({ TableName: SESSION_TABLE, Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' } }));
+    if (!itemRes.Item) return res.status(404).json({ error: 'Interview not found' });
+    if (itemRes.Item.recruiterEmail !== req.recruiterEmail) return res.status(403).json({ error: 'Forbidden' });
+    await ddb.send(new UpdateCommand({
+      TableName: SESSION_TABLE,
+      Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' },
+      UpdateExpression: 'SET archived = :a, updatedAt = :now',
+      ExpressionAttributeValues: { ':a': true, ':now': new Date().toISOString() },
+    }));
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error archiving interview:', error);
+    res.status(500).json({ error: 'Failed to archive interview' });
+  }
+});
+
+// Resend invitation email to candidate
+app.post('/interview/resend-invite/:interviewId', requireAuth, async (req, res) => {
+  try {
+    const { interviewId } = req.params;
+    if (!interviewId || typeof interviewId !== 'string' || interviewId.length > 100) {
+      return res.status(400).json({ error: 'Invalid interview ID' });
+    }
+    const itemRes = await ddb.send(new GetCommand({ TableName: SESSION_TABLE, Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' } }));
+    if (!itemRes.Item) return res.status(404).json({ error: 'Interview not found' });
+    if (itemRes.Item.recruiterEmail !== req.recruiterEmail) return res.status(403).json({ error: 'Forbidden' });
+    if (!SES_FROM_EMAIL) return res.status(503).json({ error: 'Email service not configured' });
+    const { candidateName, candidateEmail } = itemRes.Item;
+    const interviewLink = `https://d5k7p6fyxagls.cloudfront.net/interview.html?id=${interviewId}`;
+    await sendCandidateInvitationEmail(candidateName, candidateEmail, interviewLink);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error resending invite:', error);
+    res.status(500).json({ error: 'Failed to resend invitation' });
+  }
+});
+
+// Regenerate/extend interview link expiry
+app.post('/interview/regenerate/:interviewId', requireAuth, async (req, res) => {
+  try {
+    const { interviewId } = req.params;
+    if (!interviewId || typeof interviewId !== 'string' || interviewId.length > 100) {
+      return res.status(400).json({ error: 'Invalid interview ID' });
+    }
+    const itemRes = await ddb.send(new GetCommand({ TableName: SESSION_TABLE, Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' } }));
+    if (!itemRes.Item) return res.status(404).json({ error: 'Interview not found' });
+    if (itemRes.Item.recruiterEmail !== req.recruiterEmail) return res.status(403).json({ error: 'Forbidden' });
+    if (itemRes.Item.status === 'completed') return res.status(400).json({ error: 'Cannot regenerate a completed interview' });
+    const newExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    await ddb.send(new UpdateCommand({
+      TableName: SESSION_TABLE,
+      Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' },
+      UpdateExpression: 'SET expiresAt = :exp, #st = :st, updatedAt = :now',
+      ExpressionAttributeNames: { '#st': 'status' },
+      ExpressionAttributeValues: { ':exp': newExpiry, ':st': 'created', ':now': new Date().toISOString() },
+    }));
+    const interviewLink = `https://d5k7p6fyxagls.cloudfront.net/interview.html?id=${interviewId}`;
+    res.json({ success: true, expiresAt: newExpiry, interviewLink });
+  } catch (error) {
+    console.error('Error regenerating link:', error);
+    res.status(500).json({ error: 'Failed to regenerate link' });
   }
 });
 
@@ -504,26 +580,27 @@ wss.on('connection', (ws, req) => {
         // Load job description and candidate name from interview metadata
         let jobDescription = null;
         let candidateName = null;
-        try {
-          const metaRes = await ddb.send(new GetCommand({
-            TableName: SESSION_TABLE,
-            Key: { pk: `INTERVIEW#${mid}`, sk: 'META' },
-          }));
-          jobDescription = metaRes.Item?.jobDescription || null;
-          candidateName = metaRes.Item?.candidateName || null;
-        } catch (err) {
-          console.error('Could not load interview metadata for init:', err);
-        }
+          let customQuestions = null;
+          try {
+            const metaRes = await ddb.send(new GetCommand({
+              TableName: SESSION_TABLE,
+              Key: { pk: `INTERVIEW#${mid}`, sk: 'META' },
+            }));
+            jobDescription = metaRes.Item?.jobDescription || null;
+            candidateName = metaRes.Item?.candidateName || null;
+            customQuestions = metaRes.Item?.customQuestions || null;
+          } catch (err) {
+            console.error('Could not load interview metadata for init:', err);
+          }
 
-        const result = await processTranscript({
-          meetingId: mid,
-          attendeeId: aid,
-          transcriptText: '',
-          isInit: true,
-          jobDescription,
-          candidateName,
-        });
-
+          const result = await processTranscript({
+            meetingId: mid,
+            attendeeId: aid,
+            transcriptText: '',
+            isInit: true,
+            jobDescription,
+            candidateName,
+            customQuestions,
         // Generate audio
         const audioBuffer = await generateSpeech(result.spokenText);
 

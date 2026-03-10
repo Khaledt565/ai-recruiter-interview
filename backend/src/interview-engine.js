@@ -159,7 +159,7 @@ export async function generateCandidateSummary(history, candidateName, jobDescri
 }
 
 // Main interview processing logic
-export async function processTranscript({ meetingId, attendeeId, transcriptText, isInit = false, jobDescription, candidateName }) {
+export async function processTranscript({ meetingId, attendeeId, transcriptText, isInit = false, jobDescription, candidateName, customQuestions }) {
   // Load or init state
   const state = (await loadState(meetingId, attendeeId)) || {
     qIndex: 0,
@@ -174,7 +174,10 @@ export async function processTranscript({ meetingId, attendeeId, transcriptText,
     state.done = false;
     state.history = [];
     state.startedAt = new Date().toISOString();
-    if (jobDescription) {
+    if (customQuestions && Array.isArray(customQuestions) && customQuestions.length > 0) {
+      state.questions = customQuestions;
+      state.jobDescription = jobDescription || null;
+    } else if (jobDescription) {
       console.log("Generating JD-specific questions...");
       state.questions = await generateQuestionsFromJD(jobDescription, candidateName || "the candidate");
       state.jobDescription = jobDescription;

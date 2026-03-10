@@ -218,6 +218,25 @@
     /* Export button */
     .export-btn { display: flex; align-items: center; gap: 6px; padding: 6px 13px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px solid var(--border); background: var(--surface); color: var(--text); transition: all 0.15s; white-space: nowrap; }
     .export-btn:hover { border-color: #10b981; color: #10b981; }
+    /* Detail panel actions */
+    .detail-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+    .detail-action-btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px solid var(--border); background: var(--surface); color: var(--text); transition: all 0.15s; }
+    .detail-action-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .detail-action-btn.danger:hover { border-color: #ef4444; color: #ef4444; }
+    .detail-action-btn.success { border-color: var(--accent); }
+    .expiry-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; vertical-align: middle; margin-left: 6px; }
+    .expiry-ok { background: #d1fae5; color: #065f46; }
+    .expiry-warn { background: #fef3c7; color: #92400e; }
+    .expiry-expired { background: #fee2e2; color: #991b1b; }
+    /* Custom questions */
+    .custom-q-toggle { display: flex; align-items: center; gap: 5px; background: none; border: none; cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--accent); padding: 0 0 14px; }
+    .custom-q-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+    .custom-q-item { display: flex; gap: 6px; align-items: flex-start; }
+    .custom-q-item textarea { flex: 1; min-height: 52px; }
+    .custom-q-remove { background: none; border: 1.5px solid var(--border); color: var(--muted); cursor: pointer; border-radius: 6px; padding: 3px 8px; font-size: 16px; line-height: 1; flex-shrink: 0; margin-top: 2px; transition: all 0.15s; }
+    .custom-q-remove:hover { border-color: #ef4444; color: #ef4444; }
+    .add-q-btn { display: flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px dashed var(--border); background: transparent; color: var(--muted); transition: all 0.15s; }
+    .add-q-btn:hover { border-color: var(--accent); color: var(--accent); }
   </style>
 </head>
 <body>
@@ -414,6 +433,13 @@
               </div>
               <div class="cv-drop-hint">&#8593; Drag &amp; drop a CV or job description file &mdash; PDF, DOCX, or TXT</div>
               <div class="cv-status" id="cvStatus"></div>
+            </div>
+            <button type="button" class="custom-q-toggle" id="customQToggle" onclick="toggleCustomQ()">&#43; Add custom questions <span style="font-weight:400;color:var(--muted)">(optional &#8212; replaces AI questions)</span></button>
+            <div class="form-group" id="customQSection" style="display:none;">
+              <label class="form-label">Custom Questions <span class="form-hint">&#8212; up to 5, asked in order</span></label>
+              <div class="custom-q-list" id="customQList"></div>
+              <button type="button" class="add-q-btn" id="addQBtn" onclick="addCustomQuestion()">&#43; Add a question</button>
+              <p style="font-size:11.5px;color:var(--muted);margin-top:7px;">Tip: start with a greeting as question&nbsp;1. If provided, these replace AI-generated questions.</p>
             </div>
             <div class="inline-error" id="createError"></div>
             <button type="submit" class="submit-btn" id="submitBtn">
@@ -664,8 +690,44 @@
     var score = s.score != null ? s.score : null;
     var scorePct = score != null ? (score / 10) * 100 : 0;
     var barColor = score >= 7 ? '#10b981' : score >= 5 ? '#f59e0b' : score != null ? '#ef4444' : '#d1d5db';
+    // Expiry info
+    var now = new Date();
+    var expiresAt = s.expiresAt ? new Date(s.expiresAt) : null;
+    var isExpired = expiresAt && expiresAt < now;
+    var daysLeft = expiresAt && !isExpired ? Math.ceil((expiresAt - now) / 86400000) : 0;
+    var expiryHtml = '';
+    if (s.status !== 'completed' && expiresAt) {
+      if (isExpired) {
+        expiryHtml = '<span class="expiry-chip expiry-expired">\u23F3 Expired</span>';
+      } else if (daysLeft <= 2) {
+        expiryHtml = '<span class="expiry-chip expiry-warn">\u23F3 ' + daysLeft + ' day' + (daysLeft !== 1 ? 's' : '') + ' left</span>';
+      } else {
+        expiryHtml = '<span class="expiry-chip expiry-ok">\u23F3 Expires ' + formatDate(s.expiresAt) + '</span>';
+      }
+    }
+    // Interview link row (for not-started or expired)
+    var linkHtml = '';
+    if (s.status === 'created' || isExpired) {
+      var rawLink = 'https://d5k7p6fyxagls.cloudfront.net/interview.html?id=' + s.interviewId;
+      linkHtml = '<div style="margin-bottom:16px;"><div class="detail-section-title">Interview Link ' + expiryHtml + '</div>' +
+        '<div style="background:#f3f4f6;border-radius:7px;padding:8px 12px;font-family:monospace;font-size:11.5px;color:#6366f1;word-break:break-all;margin:6px 0;">' + esc(rawLink) + '</div>' +
+        '<button class="detail-action-btn success" onclick="copyInterviewLink(\'' + esc(s.interviewId) + '\');">\u{1F4CB} Copy link</button>' +
+      '</div>';
+    }
+    // Action buttons
+    var actions = '<div class="detail-actions">';
+    if (s.status !== 'completed' && s.candidateEmail) {
+      actions += '<button class="detail-action-btn" onclick="resendInvite(\'' + s.interviewId + '\', this)">\u2709\uFE0F Resend Email</button>';
+    }
+    if (s.status !== 'completed') {
+      actions += '<button class="detail-action-btn" onclick="regenerateLink(\'' + s.interviewId + '\', this)">' + (isExpired ? '\u25B6 Regenerate Link' : '\u{1F501} Extend Link (+7 days)') + '</button>';
+    }
+    actions += '<button class="detail-action-btn danger" onclick="archiveInterview(\'' + s.interviewId + '\', this)">\uD83D\uDDD1\uFE0F Archive</button>';
+    actions += '</div>';
     return '<div class="detail-grid">' +
       '<div>' +
+        linkHtml +
+        (s.status !== 'completed' && !linkHtml && expiryHtml ? '<div style="margin-bottom:12px;">' + expiryHtml + '</div>' : '') +
         (s.summary ? '<div class="detail-section-title">AI Summary</div><p class="summary-text" style="margin-bottom:16px;">' + esc(s.summary) + '</p>' : '') +
         (score != null ? '<div class="detail-section-title">Score</div><div class="score-bar-wrap" style="margin-bottom:16px;"><div class="score-bar-bg"><div class="score-bar-fill" style="width:' + scorePct + '%;background:' + barColor + ';"></div></div><div class="score-bar-label">' + score + '/10</div></div>' : '') +
         (strengths ? '<div class="detail-section-title">Strengths</div><div class="chip-list" style="margin-bottom:14px;">' + strengths + '</div>' : '') +
@@ -675,7 +737,7 @@
       '<div>' +
         (transcript ? '<div class="detail-section-title">Transcript (' + convo.length + ' turns)</div><div class="transcript-list">' + transcript + '</div>' : '<p style="color:var(--muted);font-size:13px;">No transcript available.</p>') +
       '</div>' +
-    '</div>';
+    '</div>' + actions;
   }
 
   function toggleDetail(id) {
@@ -720,11 +782,14 @@
     btn.disabled = true;
     btnText.textContent = 'Creating\u2026';
 
+    var customQInputs = document.querySelectorAll('.custom-q-textarea');
+    var customQs = Array.from(customQInputs).map(function(t) { return t.value.trim(); }).filter(Boolean);
     var data = {
       candidateName:  document.getElementById('candidateName').value.trim(),
       candidateEmail: document.getElementById('candidateEmail').value.trim(),
       recruiterEmail: document.getElementById('recruiterEmail').value.trim(),
       jobDescription: document.getElementById('jobDescription').value.trim() || undefined,
+      customQuestions: customQs.length ? customQs : undefined,
     };
 
     fetch(BACKEND_URL + '/interview/create', {
@@ -747,6 +812,10 @@
       document.getElementById('candidateName').value = '';
       document.getElementById('candidateEmail').value = '';
       document.getElementById('jobDescription').value = '';
+      document.getElementById('customQList').innerHTML = '';
+      document.getElementById('customQSection').style.display = 'none';
+      document.getElementById('customQToggle').innerHTML = '\u002B Add custom questions <span style="font-weight:400;color:var(--muted)">(optional \u2014 replaces AI questions)</span>';
+      document.getElementById('addQBtn').style.display = '';
       showToast('Interview link created for ' + data.candidateName);
       loadSessions();
     })
@@ -968,6 +1037,77 @@
       reader.readAsArrayBuffer(file);
     }
   })();
+
+  // ── Detail panel actions ────────────────────────────────────────────────────
+  function archiveInterview(id, btn) {
+    if (!confirm('Archive this candidate? They will be removed from your list.')) return;
+    btn.disabled = true; btn.textContent = 'Archiving\u2026';
+    fetch(BACKEND_URL + '/interview/' + id, { method: 'DELETE', headers: authHeaders() })
+      .then(function(res) { if (!res.ok) throw new Error('Failed'); return res.json(); })
+      .then(function() {
+        allSessions = allSessions.filter(function(s) { return s.interviewId !== id; });
+        expandedRow = null;
+        renderTable(); renderDashboard();
+        showToast('Candidate archived');
+      })
+      .catch(function() { showToast('Failed to archive', 'error'); btn.disabled = false; btn.textContent = '\uD83D\uDDD1\uFE0F Archive'; });
+  }
+
+  function resendInvite(id, btn) {
+    btn.disabled = true; btn.textContent = 'Sending\u2026';
+    fetch(BACKEND_URL + '/interview/resend-invite/' + id, { method: 'POST', headers: authHeaders() })
+      .then(function(res) { if (!res.ok) throw new Error('Failed'); return res.json(); })
+      .then(function() { showToast('Invitation email resent!'); btn.textContent = '\u2705 Sent'; })
+      .catch(function() { showToast('Failed to resend email', 'error'); btn.disabled = false; btn.textContent = '\u2709\uFE0F Resend Email'; });
+  }
+
+  function regenerateLink(id, btn) {
+    btn.disabled = true; btn.textContent = 'Updating\u2026';
+    fetch(BACKEND_URL + '/interview/regenerate/' + id, { method: 'POST', headers: authHeaders() })
+      .then(function(res) { if (!res.ok) throw new Error('Failed'); return res.json(); })
+      .then(function(result) {
+        var s = allSessions.find(function(x) { return x.interviewId === id; });
+        if (s) { s.expiresAt = result.expiresAt; s.status = 'created'; }
+        renderTable();
+        showToast('Link extended \u2014 valid for 7 more days');
+      })
+      .catch(function() { showToast('Failed to extend link', 'error'); btn.disabled = false; btn.textContent = '\u{1F501} Extend Link (+7 days)'; });
+  }
+
+  function copyInterviewLink(id) {
+    var link = 'https://d5k7p6fyxagls.cloudfront.net/interview.html?id=' + id;
+    navigator.clipboard.writeText(link)
+      .then(function() { showToast('Link copied!'); })
+      .catch(function() { showToast('Could not copy link', 'error'); });
+  }
+
+  // ── Custom questions ─────────────────────────────────────────────────────────
+  function toggleCustomQ() {
+    var section = document.getElementById('customQSection');
+    var isOpen = section.style.display !== 'none';
+    section.style.display = isOpen ? 'none' : '';
+    document.getElementById('customQToggle').innerHTML = isOpen
+      ? '\u002B Add custom questions <span style="font-weight:400;color:var(--muted)">(optional \u2014 replaces AI questions)</span>'
+      : '\u2212 Hide custom questions';
+    if (!isOpen && document.querySelectorAll('.custom-q-textarea').length === 0) addCustomQuestion();
+  }
+
+  function addCustomQuestion() {
+    var list = document.getElementById('customQList');
+    if (list.querySelectorAll('.custom-q-item').length >= 5) { showToast('Maximum 5 questions', 'error'); return; }
+    var div = document.createElement('div');
+    div.className = 'custom-q-item';
+    div.innerHTML = '<textarea class="form-input custom-q-textarea" rows="2" placeholder="E.g. Can you walk me through your background in\u2026"></textarea>' +
+      '<button type="button" class="custom-q-remove" onclick="onRemoveQ(this)">&#215;</button>';
+    list.appendChild(div);
+    div.querySelector('textarea').focus();
+    if (list.querySelectorAll('.custom-q-item').length >= 5) document.getElementById('addQBtn').style.display = 'none';
+  }
+
+  function onRemoveQ(btn) {
+    btn.parentNode.remove();
+    document.getElementById('addQBtn').style.display = '';
+  }
 
   // Boot
   loadDashboard();
