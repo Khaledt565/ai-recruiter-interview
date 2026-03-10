@@ -177,8 +177,9 @@ async function sendCandidateInvitationEmail(candidateName, candidateEmail, inter
     <div style="padding:28px 36px;">
       <p style="color:#374151;font-size:14px;line-height:1.7;margin:0 0 20px;">Click the button below to begin your interview. The AI interviewer will guide you through a series of questions — just speak naturally into your microphone.</p>
       <div style="text-align:center;margin:24px 0;">
-        <a href="${interviewLink}" style="display:inline-block;background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:14px 32px;border-radius:10px;">Start My Interview</a>
+        <a href="${interviewLink}" style="display:inline-block;background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;text-decoration:none;font-weight:700;font-size:16px;padding:16px 36px;border-radius:10px;letter-spacing:0.01em;">&#128279; Click Here to Join Your Interview</a>
       </div>
+      <p style="text-align:center;color:#6b7280;font-size:13px;margin:0 0 20px;">or copy and paste the link below into your browser</p>
       <div style="background:#f9fafb;border-radius:10px;padding:16px 18px;margin:20px 0;">
         <p style="font-size:12px;color:#6b7280;margin:0 0 6px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Or copy this link</p>
         <p style="font-size:12px;color:#6366f1;word-break:break-all;margin:0;font-family:monospace;">${interviewLink}</p>
