@@ -49,3 +49,45 @@ jobs:
           CLUSTER: ai-recruiter-cluster
           SERVICE: ai-recruiter-service
         run: aws ecs update-service --cluster $CLUSTER --service $SERVICE --force-new-deployment --region ${{ env.AWS_REGION }}
+
+      - name: Wait for new task to be running
+        env:
+          CLUSTER: ai-recruiter-cluster
+          SERVICE: ai-recruiter-service
+        run: |
+          echo "Waiting for ECS service to stabilize..."
+          aws ecs wait services-stable --cluster $CLUSTER --services $SERVICE --region ${{ env.AWS_REGION }}
+          echo "Service is stable."
+
+      - name: Update API Gateway with new Fargate IP
+        env:
+          API_ID: l05uyc9rza
+          RESOURCE_ID: 2kgmqr
+          CLUSTER: ai-recruiter-cluster
+          SERVICE: ai-recruiter-service
+        run: |
+          # Get the running task ARN
+          TASK_ARN=$(aws ecs list-tasks --cluster $CLUSTER --service-name $SERVICE --region ${{ env.AWS_REGION }} --query "taskArns[0]" --output text)
+          echo "Task ARN: $TASK_ARN"
+
+          # Get the ENI from the task
+          ENI_ID=$(aws ecs describe-tasks --cluster $CLUSTER --tasks $TASK_ARN --region ${{ env.AWS_REGION }} \
+            --query "tasks[0].attachments[0].details[?name=='networkInterfaceId'].value" --output text)
+          echo "ENI ID: $ENI_ID"
+
+          # Get the public IP
+          PUBLIC_IP=$(aws ec2 describe-network-interfaces --network-interface-ids $ENI_ID \
+            --region ${{ env.AWS_REGION }} --query "NetworkInterfaces[0].Association.PublicIp" --output text)
+          echo "New Fargate public IP: $PUBLIC_IP"
+
+          # Update API Gateway integration URI
+          aws apigateway update-integration \
+            --rest-api-id $API_ID \
+            --resource-id $RESOURCE_ID \
+            --http-method ANY \
+            --patch-operations "[{\"op\":\"replace\",\"path\":\"/uri\",\"value\":\"http://$PUBLIC_IP:8080/{proxy}\"}]" \
+            --region ${{ env.AWS_REGION }}
+
+          # Redeploy API Gateway
+          aws apigateway create-deployment --rest-api-id $API_ID --stage-name prod --region ${{ env.AWS_REGION }}
+          echo "API Gateway updated to http://$PUBLIC_IP:8080"
