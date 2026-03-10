@@ -1124,11 +1124,12 @@
     .then(function(data) {
       var questions = data.questions || [];
       if (!questions.length) { showToast('No questions generated — try adding more CV/JD detail', 'error'); return; }
+      currentSuggestions = questions;
       panel.innerHTML = '<p style="font-size:12px;color:var(--muted);margin:0 0 8px;">&#10024; AI suggested questions — click <strong>Add</strong> to include in the interview:</p>' +
         questions.map(function(q, i) {
           return '<div class="suggestion-card" id="scard-' + i + '">' +
             '<div class="suggestion-text">' + esc(q) + '</div>' +
-            '<button type="button" class="suggestion-add-btn" onclick="addSuggestedQuestion(' + i + ', ' + JSON.stringify(q) + ')">+ Add</button>' +
+            '<button type="button" class="suggestion-add-btn" onclick="addSuggestedQuestion(' + i + ')">+ Add</button>' +
           '</div>';
         }).join('');
       panel.style.display = '';

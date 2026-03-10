@@ -214,11 +214,6 @@ class InterviewApp {
       const data = await response.json();
       console.log('Backend response:', data);
 
-      if (data.qIndex !== undefined) {
-        const progress = ((data.qIndex / 5) * 100).toFixed(0);
-        this.updateStatus(`Question ${data.qIndex + 1} of 5 (${progress}% complete)`, 'active');
-      }
-
       document.getElementById('interviewer-text').textContent = data.spokenText;
 
       if (data.audioBase64) {
