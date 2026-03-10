@@ -121,6 +121,24 @@ class InterviewApp {
       this.updateStatus('Initializing...', 'connecting');
       document.getElementById('start-btn').disabled = true;
 
+      // Initialize the interview session — this loads candidate metadata,
+      // custom questions and JD from the server before any transcript arrives
+      const initResp = await fetch(this.config.backendHttpUrl + '?withAudio=true', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          meetingId: this.meetingId,
+          attendeeId: this.attendeeId,
+          transcriptText: '',
+          isInit: true,
+          token: this.linkToken,
+        }),
+      });
+      const initData = await initResp.json();
+      console.log('Init response:', initData);
+      document.getElementById('interviewer-text').textContent = initData.spokenText || '';
+      if (initData.audioBase64) this.playAudio(initData.audioBase64);
+
       console.log('Getting Cognito credentials...');
       const credentials = fromCognitoIdentityPool({
         identityPoolId: this.config.cognitoIdentityPoolId,

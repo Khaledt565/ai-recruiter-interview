@@ -539,11 +539,34 @@ app.post('/interview/process', async (req, res) => {
       return res.status(400).json({ error: 'Text too long' });
     }
 
+    // On init (or first call), load interview metadata so the engine gets
+    // the correct candidate name, JD, and any recruiter-added custom questions
+    let jobDescription = null;
+    let candidateName = null;
+    let customQuestions = null;
+    if (isInit === true) {
+      try {
+        const metaRes = await ddb.send(new GetCommand({
+          TableName: SESSION_TABLE,
+          Key: { pk: `INTERVIEW#${meetingId}`, sk: 'META' },
+        }));
+        jobDescription = metaRes.Item?.jobDescription || null;
+        candidateName = metaRes.Item?.candidateName || null;
+        customQuestions = metaRes.Item?.customQuestions || null;
+        console.log(`[/process] init — candidate: "${candidateName}", hasJD: ${!!jobDescription}, customQs: ${customQuestions?.length || 0}`);
+      } catch (err) {
+        console.error('[/process] Failed to load interview metadata:', err.message);
+      }
+    }
+
     const result = await processTranscript({
       meetingId,
       attendeeId,
       transcriptText,
       isInit: isInit === true,
+      jobDescription,
+      candidateName,
+      customQuestions,
     });
 
     // Save full conversation to S3 when interview is done
