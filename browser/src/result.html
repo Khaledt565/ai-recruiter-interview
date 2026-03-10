@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interview Complete — AI Interviewer</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f6fa;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.1);
+      max-width: 520px;
+      width: 100%;
+      overflow: hidden;
+      text-align: center;
+    }
+
+    .card-header {
+      background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+      padding: 44px 36px 36px;
+    }
+
+    /* Animated checkmark */
+    .checkmark-wrap {
+      width: 80px;
+      height: 80px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+
+    @keyframes pop {
+      from { transform: scale(0); opacity: 0; }
+      to   { transform: scale(1); opacity: 1; }
+    }
+
+    .checkmark-wrap svg {
+      width: 44px;
+      height: 44px;
+    }
+
+    .checkmark-circle {
+      stroke: rgba(255,255,255,0.4);
+      stroke-width: 3;
+      fill: none;
+    }
+
+    .checkmark-check {
+      stroke: #fff;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+      stroke-dasharray: 50;
+      stroke-dashoffset: 50;
+      animation: draw 0.4s ease 0.35s forwards;
+    }
+
+    @keyframes draw {
+      to { stroke-dashoffset: 0; }
+    }
+
+    .card-header h1 {
+      color: #fff;
+      font-size: 24px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .card-header p {
+      color: rgba(255,255,255,0.8);
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    .card-body {
+      padding: 32px 36px 36px;
+    }
+
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 28px;
+      text-align: left;
+    }
+
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 14px 16px;
+      background: #f9fafb;
+      border-radius: 12px;
+      animation: slideUp 0.4s ease both;
+    }
+
+    .step:nth-child(1) { animation-delay: 0.5s; }
+    .step:nth-child(2) { animation-delay: 0.65s; }
+    .step:nth-child(3) { animation-delay: 0.8s; }
+
+    @keyframes slideUp {
+      from { transform: translateY(12px); opacity: 0; }
+      to   { transform: translateY(0);   opacity: 1; }
+    }
+
+    .step-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: #eef2ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .step-text strong {
+      display: block;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #111827;
+      margin-bottom: 2px;
+    }
+
+    .step-text span {
+      font-size: 12.5px;
+      color: #6b7280;
+      line-height: 1.5;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #f3f4f6;
+      margin: 0 0 24px;
+    }
+
+    .id-chip {
+      display: inline-block;
+      background: #f3f4f6;
+      color: #6b7280;
+      font-size: 11.5px;
+      font-family: monospace;
+      padding: 5px 12px;
+      border-radius: 20px;
+      word-break: break-all;
+      margin-bottom: 24px;
+    }
+
+    .close-note {
+      font-size: 13px;
+      color: #9ca3af;
+      line-height: 1.6;
+    }
+
+    .close-note strong {
+      color: #6b7280;
+    }
+
+    /* Loading skeleton */
+    .skeleton-name {
+      height: 20px;
+      width: 160px;
+      background: linear-gradient(90deg, rgba(255,255,255,0.2) 25%, rgba(255,255,255,0.35) 50%, rgba(255,255,255,0.2) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 6px;
+      margin: 6px auto 0;
+    }
+
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    #candidateNameEl { color: rgba(255,255,255,0.9); font-size: 15px; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="card-header">
+      <div class="checkmark-wrap">
+        <svg viewBox="0 0 48 48">
+          <circle class="checkmark-circle" cx="24" cy="24" r="20"/>
+          <polyline class="checkmark-check" points="14,24 21,31 34,17"/>
+        </svg>
+      </div>
+      <h1>Interview Complete!</h1>
+      <div id="candidateNameEl"><div class="skeleton-name"></div></div>
+    </div>
+
+    <div class="card-body">
+      <div class="steps">
+        <div class="step">
+          <div class="step-icon">&#128172;</div>
+          <div class="step-text">
+            <strong>Your responses have been recorded</strong>
+            <span>The AI interviewer has captured all your answers securely.</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-icon">&#129504;</div>
+          <div class="step-text">
+            <strong>AI analysis in progress</strong>
+            <span>Your interview is being reviewed and scored automatically.</span>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-icon">&#128140;</div>
+          <div class="step-text">
+            <strong>The recruiter will be in touch</strong>
+            <span>They will receive your results and reach out with next steps.</span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <div id="interviewIdSection" style="display:none;">
+        <p style="font-size:12px;color:#9ca3af;margin-bottom:6px;">Interview reference</p>
+        <div class="id-chip" id="interviewIdDisplay"></div>
+      </div>
+
+      <p class="close-note">
+        You can now <strong>close this tab</strong>.<br>
+        Good luck with the rest of your application! &#127919;
+      </p>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      var backendHost = window.location.hostname === 'localhost'
+        ? 'localhost:8080'
+        : 'l05uyc9rza.execute-api.eu-central-1.amazonaws.com/prod';
+      var backendProtocol = window.location.hostname === 'localhost' ? 'http' : 'https';
+      var BACKEND_URL = backendProtocol + '://' + backendHost;
+
+      var params = new URLSearchParams(window.location.search);
+      var interviewId = params.get('id');
+
+      if (interviewId) {
+        document.getElementById('interviewIdDisplay').textContent = interviewId;
+        document.getElementById('interviewIdSection').style.display = 'block';
+
+        fetch(BACKEND_URL + '/interview/result/' + encodeURIComponent(interviewId))
+          .then(function(res) { return res.ok ? res.json() : null; })
+          .then(function(data) {
+            var nameEl = document.getElementById('candidateNameEl');
+            if (data && data.candidateName) {
+              nameEl.textContent = 'Well done, ' + data.candidateName + '!';
+            } else {
+              nameEl.textContent = 'Well done! Your interview has been submitted.';
+            }
+          })
+          .catch(function() {
+            document.getElementById('candidateNameEl').textContent = 'Your interview has been submitted.';
+          });
+      } else {
+        document.getElementById('candidateNameEl').textContent = 'Your interview has been submitted.';
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -37,6 +37,11 @@ module.exports = {
       filename: 'recruiter-login.html',
       chunks: [], // Standalone page with inline script
     }),
+    new HtmlWebpackPlugin({
+      template: './src/result.html',
+      filename: 'result.html',
+      chunks: [], // Standalone candidate thank-you page
+    }),
     new webpack.ProvidePlugin({
       Buffer: ['buffer', 'Buffer'],
       process: 'process/browser',

@@ -204,6 +204,20 @@
     .toast.error   { border-left: 3px solid #ef4444; }
     @media (max-width: 1100px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .dashboard-grid { grid-template-columns: 1fr; } .create-layout { grid-template-columns: 1fr; } }
     @media (max-width: 768px) { :root { --sidebar-w: 0px; } .sidebar { display: none; } .main { margin-left: 0; } .stats-grid { grid-template-columns: 1fr 1fr; } .form-row { grid-template-columns: 1fr; } .detail-grid { grid-template-columns: 1fr; } }
+
+    /* CV drop zone */
+    .cv-drop-zone { position: relative; }
+    .cv-drop-zone.drag-over textarea { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .cv-drop-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(99,102,241,0.07); border: 2px dashed var(--accent); border-radius: 8px; pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 2; }
+    .cv-drop-zone.drag-over .cv-drop-overlay { opacity: 1; }
+    .cv-drop-message { text-align: center; color: var(--accent); font-weight: 700; font-size: 14px; }
+    .cv-drop-message small { display: block; font-size: 11.5px; font-weight: 400; color: var(--muted); margin-top: 4px; }
+    .cv-drop-hint { font-size: 11.5px; color: var(--muted); margin-top: 6px; display: flex; align-items: center; gap: 5px; }
+    .cv-status { font-size: 12px; margin-top: 5px; min-height: 18px; }
+
+    /* Export button */
+    .export-btn { display: flex; align-items: center; gap: 6px; padding: 6px 13px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1.5px solid var(--border); background: var(--surface); color: var(--text); transition: all 0.15s; white-space: nowrap; }
+    .export-btn:hover { border-color: #10b981; color: #10b981; }
   </style>
 </head>
 <body>
@@ -342,6 +356,7 @@
             <button class="filter-tab" data-filter="created" onclick="setFilter(this)">Not Started</button>
             <button class="filter-tab" data-filter="ended" onclick="setFilter(this)">Ended Early</button>
           </div>
+          <button class="export-btn" onclick="exportCSV()" title="Export visible rows as CSV">&#8675; Export CSV</button>
         </div>
         <div style="overflow-x:auto;">
           <table class="data-table">
@@ -388,10 +403,17 @@
             </div>
             <div class="form-group">
               <label class="form-label" for="jobDescription">
-                Job Description
+                Job Description / CV
                 <span class="form-hint">&#8212; optional, enables AI-tailored questions</span>
               </label>
-              <textarea class="form-input" id="jobDescription" placeholder="Paste the job description for this role. The AI will generate relevant interview questions automatically&#8230;" rows="5"></textarea>
+              <div class="cv-drop-zone" id="cvDropZone">
+                <textarea class="form-input" id="jobDescription" placeholder="Paste the job description for this role, or drag &amp; drop a CV/JD file below&#8230;" rows="5"></textarea>
+                <div class="cv-drop-overlay">
+                  <div class="cv-drop-message">&#128196; Drop file here<small>PDF, DOCX, or TXT</small></div>
+                </div>
+              </div>
+              <div class="cv-drop-hint">&#8593; Drag &amp; drop a CV or job description file &mdash; PDF, DOCX, or TXT</div>
+              <div class="cv-status" id="cvStatus"></div>
             </div>
             <div class="inline-error" id="createError"></div>
             <button type="submit" class="submit-btn" id="submitBtn">
@@ -805,8 +827,155 @@
     return new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   }
 
+  // ── CSV Export ─────────────────────────────────────────────────────────────
+  function exportCSV() {
+    var q = document.getElementById('searchInput').value.toLowerCase();
+    var rows = allSessions.filter(function(s) {
+      var matchFilter = currentFilter === 'all'
+        || (currentFilter === 'completed' && s.status === 'completed')
+        || (currentFilter === 'created' && s.status === 'created')
+        || (currentFilter === 'ended' && s.status && s.status.indexOf('ended') !== -1);
+      var matchSearch = !q
+        || (s.candidateName || '').toLowerCase().indexOf(q) !== -1
+        || (s.candidateEmail || '').toLowerCase().indexOf(q) !== -1;
+      return matchFilter && matchSearch;
+    });
+
+    if (!rows.length) { showToast('No data to export with current filter.', 'error'); return; }
+
+    var headers = ['Interview ID', 'Candidate Name', 'Candidate Email', 'Status', 'Date', 'AI Score', 'Recommendation', 'Summary'];
+    var csvRows = [headers.join(',')];
+    rows.forEach(function(s) {
+      csvRows.push([
+        csvCell(s.interviewId),
+        csvCell(s.candidateName),
+        csvCell(s.candidateEmail),
+        csvCell(s.status),
+        csvCell(s.createdAt ? new Date(s.createdAt).toISOString().split('T')[0] : ''),
+        s.score != null ? s.score : '',
+        csvCell(s.recommendation),
+        csvCell(s.summary),
+      ].join(','));
+    });
+
+    var blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var date = new Date().toISOString().split('T')[0];
+    a.href = url;
+    a.download = 'candidates-' + date + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Exported ' + rows.length + ' candidate' + (rows.length !== 1 ? 's' : '') + ' to CSV');
+  }
+
+  function csvCell(val) {
+    var str = String(val == null ? '' : val);
+    if (str.indexOf(',') !== -1 || str.indexOf('"') !== -1 || str.indexOf('\n') !== -1) {
+      return '"' + str.replace(/"/g, '""') + '"';
+    }
+    return str;
+  }
+
+  // ── CV Drag & Drop ───────────────────────────────────────────────────────────
+  (function setupCVDrop() {
+    var zone   = document.getElementById('cvDropZone');
+    var jdArea = document.getElementById('jobDescription');
+    var status = document.getElementById('cvStatus');
+    if (!zone) return;
+
+    function setStatus(msg, ok) {
+      status.textContent = msg;
+      status.style.color = ok ? '#10b981' : ok === false ? '#dc2626' : 'var(--accent)';
+    }
+
+    ['dragenter','dragover'].forEach(function(ev) {
+      zone.addEventListener(ev, function(e) { e.preventDefault(); e.stopPropagation(); zone.classList.add('drag-over'); });
+    });
+    zone.addEventListener('dragleave', function(e) {
+      if (!zone.contains(e.relatedTarget)) zone.classList.remove('drag-over');
+    });
+    zone.addEventListener('drop', function(e) {
+      e.preventDefault(); e.stopPropagation();
+      zone.classList.remove('drag-over');
+      var file = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!file) return;
+      var name = file.name.toLowerCase();
+      if (name.endsWith('.pdf')) {
+        setStatus('Extracting text from PDF\u2026', null);
+        extractPDF(file);
+      } else if (name.endsWith('.docx')) {
+        setStatus('Extracting text from Word document\u2026', null);
+        extractDOCX(file);
+      } else if (name.endsWith('.txt') || name.endsWith('.text') || (file.type && file.type.startsWith('text/'))) {
+        setStatus('Reading text file\u2026', null);
+        extractTXT(file);
+      } else {
+        setStatus('Unsupported file type. Please use PDF, DOCX, or TXT.', false);
+      }
+    });
+
+    function extractTXT(file) {
+      var reader = new FileReader();
+      reader.onload = function(e) { jdArea.value = e.target.result; setStatus('\u2705 Text imported from ' + file.name, true); };
+      reader.onerror = function() { setStatus('Failed to read file.', false); };
+      reader.readAsText(file);
+    }
+
+    function extractPDF(file) {
+      if (typeof window.pdfjsLib === 'undefined') {
+        setStatus('PDF library not loaded yet \u2014 please wait a moment and try again.', false); return;
+      }
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        window.pdfjsLib.getDocument({ data: new Uint8Array(e.target.result) }).promise
+          .then(function(pdf) {
+            var promises = [];
+            for (var i = 1; i <= pdf.numPages; i++) {
+              promises.push(pdf.getPage(i).then(function(pg) {
+                return pg.getTextContent().then(function(tc) {
+                  return tc.items.map(function(item) { return item.str; }).join(' ');
+                });
+              }));
+            }
+            return Promise.all(promises).then(function(texts) {
+              jdArea.value = texts.join('\n\n');
+              setStatus('\u2705 Extracted ' + pdf.numPages + ' page' + (pdf.numPages !== 1 ? 's' : '') + ' from ' + file.name, true);
+            });
+          })
+          .catch(function() { setStatus('Failed to extract PDF text. The PDF may be image-based.', false); });
+      };
+      reader.onerror = function() { setStatus('Failed to read file.', false); };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function extractDOCX(file) {
+      if (typeof window.mammoth === 'undefined') {
+        setStatus('Word library not loaded yet \u2014 please wait a moment and try again.', false); return;
+      }
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        window.mammoth.extractRawText({ arrayBuffer: e.target.result })
+          .then(function(result) {
+            jdArea.value = result.value;
+            setStatus('\u2705 Text imported from ' + file.name, true);
+          })
+          .catch(function() { setStatus('Failed to extract Word document text.', false); });
+      };
+      reader.onerror = function() { setStatus('Failed to read file.', false); };
+      reader.readAsArrayBuffer(file);
+    }
+  })();
+
   // Boot
   loadDashboard();
 </script>
+
+<!-- PDF.js + Mammoth.js for CV file extraction -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if (typeof pdfjsLib !== 'undefined') { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; window.pdfjsLib = pdfjsLib; }</script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
 </body>
 </html>

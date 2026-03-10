@@ -226,7 +226,9 @@ class InterviewApp {
 
       if (data.done) {
         this.updateStatus('✅ Interview completed! Thank you.', '');
-        setTimeout(() => this.stopInterview(), 3000);
+        setTimeout(() => {
+          window.location.href = 'result.html?id=' + this.interviewId;
+        }, 2000);
       }
     } catch (error) {
       console.error('Backend error:', error);
