@@ -17,6 +17,8 @@ const makeKeys = (meetingId, attendeeId) => ({
 export async function loadState(meetingId, attendeeId) {
   const { pk, sk } = makeKeys(meetingId, attendeeId);
   const res = await ddb.send(new GetCommand({ TableName: SESSION_TABLE, Key: { pk, sk } }));
+  const found = !!res.Item;
+  console.log(`[SessionStore] loadState [${meetingId}/${attendeeId}] — ${found ? `found (qIndex=${res.Item.qIndex}, done=${res.Item.done})` : 'not found (new session)'}`);
   return res.Item || null;
 }
 
@@ -26,4 +28,5 @@ export async function saveState(meetingId, attendeeId, state) {
     TableName: SESSION_TABLE,
     Item: { pk, sk, updatedAt: Date.now(), ...state },
   }));
+  console.log(`[SessionStore] saveState [${meetingId}/${attendeeId}] — qIndex=${state.qIndex}, done=${state.done}, turns=${(state.history || []).length}`);
 }
