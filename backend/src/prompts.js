@@ -2,6 +2,7 @@
 // All prompt strings and constants — pure data, no logic, no imports
 
 export const CLOSING = "Thanks a lot — that was really helpful. We'll review everything and get back to you soon. Have a great day!";
+export const LAST_QUESTION = "Before we wrap up — do you have any questions for us that I can pass along to the team?";
 
 export const SYSTEM_PROMPT =
   "You are a voice recruiting interviewer. You must follow the interview script. " +

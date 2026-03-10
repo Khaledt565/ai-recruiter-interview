@@ -445,7 +445,7 @@
               <div id="suggestionsPanel" style="display:none;margin-top:10px;"></div>
             </div>
             <div class="form-group">
-              <label class="form-label">Interview Questions <span class="form-hint">&#8212; asked in order (up to 10). If none added, AI auto-generates from CV/JD.</span></label>
+              <label class="form-label">Interview Questions <span class="form-hint">&#8212; middle questions (up to 10). A fixed greeting is always first, and "any questions for us?" is always last. If none added, AI auto-generates from CV/JD.</span></label>
               <div class="custom-q-list" id="customQList"></div>
               <button type="button" class="add-q-btn" id="addQBtn" onclick="addCustomQuestion()">&#43; Add a question manually</button>
             </div>
@@ -779,6 +779,7 @@
 
   // Create interview
   var generatedLink = '';
+  var currentSuggestions = [];
 
   document.getElementById('createForm').addEventListener('submit', function(e) {
     e.preventDefault();
@@ -1139,9 +1140,11 @@
     });
   }
 
-  function addSuggestedQuestion(index, text) {
+  function addSuggestedQuestion(index) {
     var addBtn = document.querySelector('#scard-' + index + ' .suggestion-add-btn');
     if (addBtn && addBtn.classList.contains('added')) return;
+    var text = currentSuggestions[index] || '';
+    if (!text) return;
     addQuestionToList(text);
     if (addBtn) { addBtn.textContent = '\u2713 Added'; addBtn.classList.add('added'); }
   }

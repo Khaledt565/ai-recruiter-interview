@@ -3,7 +3,7 @@
 
 import { loadState, saveState } from "./session-store.js";
 import { callBedrockPolicy, generateQuestionsFromJD, generateCandidateSummary } from "./bedrock-client.js";
-import { CLOSING } from "./prompts.js";
+import { CLOSING, LAST_QUESTION } from "./prompts.js";
 
 export { generateCandidateSummary };
 
@@ -17,15 +17,17 @@ export async function processTranscript({ meetingId, attendeeId, transcriptText,
     state.history = [];
     state.startedAt = new Date().toISOString();
 
+    let midQs;
     if (customQuestions && Array.isArray(customQuestions) && customQuestions.length > 0) {
-      state.questions = customQuestions;
-      state.jobDescription = jobDescription || null;
+      midQs = customQuestions;
     } else {
-      const jd = jobDescription || 'General professional role — assess motivation, experience, work style, strengths, and salary expectations';
-      console.log(jobDescription ? "Generating JD-specific questions..." : "No CV/JD provided, generating generic questions...");
-      state.questions = await generateQuestionsFromJD(jd, candidateName || "the candidate") || [];
-      state.jobDescription = jobDescription || null;
+      const jd = jobDescription || 'General professional role — assess motivation, work style, strengths, and relevant experience';
+      console.log(jobDescription ? "Generating JD-specific middle questions..." : "No CV/JD provided, generating generic middle questions...");
+      midQs = await generateQuestionsFromJD(jd, candidateName || "the candidate") || [];
     }
+    const firstQuestion = `Hi ${candidateName || 'there'}! Thanks for joining today — how are you doing?`;
+    state.questions = [firstQuestion, ...midQs, LAST_QUESTION];
+    state.jobDescription = jobDescription || null;
 
     await saveState(meetingId, attendeeId, state);
     return { spokenText: state.questions[0], done: false, qIndex: 0 };

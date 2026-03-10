@@ -38,16 +38,16 @@ export async function callBedrockPolicy({ userText, currentQuestion }) {
   return JSON.parse(parseBedrockResponse(resp) || "{}");
 }
 
-// Generate 5 role-specific questions from a job description or CV
+// Generate 3 middle interview questions from a job description (greeting and closing are always fixed by the engine)
 export async function generateQuestionsFromJD(jobDescription, candidateName) {
   try {
     const body = {
       anthropic_version: "bedrock-2023-05-31",
-      max_tokens: 700,
+      max_tokens: 600,
       temperature: 0.3,
       messages: [{
         role: "user",
-        content: `Generate exactly 5 conversational voice interview questions for ${candidateName} based on this job description:\n\n${jobDescription}\n\nRules:\n- Question 1 must be a warm greeting and icebreaker (e.g. "Hi ${candidateName}, thanks for joining! How are you doing today?")\n- Questions 2-5 should probe role-specific skills, motivation, experience, salary expectations, and invite candidate questions\n- Each question must be short (1-2 sentences), spoken naturally as voice dialogue\n- Return ONLY a JSON array of 5 strings, no other text`,
+        content: `Generate exactly 3 conversational voice interview questions for ${candidateName} based on this job description:\n\n${jobDescription}\n\nRules:\n- Do NOT include a greeting or icebreaker — that is handled separately\n- Do NOT include a closing "do you have any questions" question — that is handled separately\n- Focus on role-specific skills, motivation, experience, and salary expectations\n- Each question must be short (1-2 sentences), spoken naturally as voice dialogue\n- Return ONLY a JSON array of exactly 3 strings, no other text`,
       }],
     };
     const resp = await bedrock.send(new InvokeModelCommand({
@@ -58,7 +58,7 @@ export async function generateQuestionsFromJD(jobDescription, candidateName) {
     }));
     const text = extractJsonText(parseBedrockResponse(resp) || "[]");
     const questions = JSON.parse(text);
-    if (Array.isArray(questions) && questions.length === 5) return questions;
+    if (Array.isArray(questions) && questions.length >= 1) return questions;
   } catch (err) {
     console.error("Failed to generate dynamic questions:", err.message);
   }
