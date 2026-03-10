@@ -12,6 +12,7 @@ class InterviewApp {
     this.meetingId = null;
     this.attendeeId = null;
     this.interviewId = null;
+    this.linkToken = null;
 
     // Configuration - Dynamic Backend URL
     // Production: Use API Gateway HTTPS endpoint that proxies to backend
@@ -66,21 +67,23 @@ class InterviewApp {
   async checkInterviewLink() {
     const urlParams = new URLSearchParams(window.location.search);
     const interviewId = urlParams.get('id');
+    const token = urlParams.get('token');
 
-    if (!interviewId) {
-      this.updateStatus('❌ No interview link provided. Please use the link sent to you.', 'error');
+    if (!interviewId || !token) {
+      this.updateStatus('❌ Invalid interview link. Please use the link sent to your email.', 'error');
       document.getElementById('start-btn').disabled = true;
       return;
     }
 
     this.interviewId = interviewId;
     this.meetingId = interviewId;
+    this.linkToken = token;
 
     try {
       this.updateStatus('Validating your interview link...', 'connecting');
 
       const response = await fetch(
-        `${this.config.backendBaseUrl}/interview/validate/${interviewId}`
+        `${this.config.backendBaseUrl}/interview/validate/${interviewId}?token=${encodeURIComponent(token)}`
       );
 
       if (!response.ok) {
@@ -204,6 +207,7 @@ class InterviewApp {
           attendeeId: attendeeId,
           transcriptText: text,
           isInit: false,
+          token: this.linkToken,
         }),
       });
 

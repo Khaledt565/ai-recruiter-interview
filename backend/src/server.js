@@ -5,6 +5,7 @@ import express from 'express';
 import https from 'https';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { WebSocketServer } from 'ws';
 import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -32,6 +33,20 @@ const ses = new SESClient({ region: REGION });
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }));
 
 const SES_FROM_EMAIL = process.env.SES_FROM_EMAIL || '';
+const LINK_SECRET = process.env.LINK_SECRET || 'default-dev-secret-change-in-prod';
+
+function generateLinkToken(interviewId) {
+  return crypto.createHmac('sha256', LINK_SECRET).update(interviewId).digest('hex');
+}
+
+function verifyLinkToken(interviewId, token) {
+  const expected = generateLinkToken(interviewId);
+  try {
+    return crypto.timingSafeEqual(Buffer.from(token, 'hex'), Buffer.from(expected, 'hex'));
+  } catch {
+    return false;
+  }
+}
 
 // JWT verification using Cognito JWKS
 const jwks = jwksClient({
@@ -266,6 +281,8 @@ app.post('/interview/create', requireAuth, async (req, res) => {
 
     const interviewId = `int_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const attendeeId = `att_${Math.random().toString(36).substr(2, 9)}`;
+    const linkToken = generateLinkToken(interviewId);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
     await ddb.send(
       new PutCommand({
@@ -282,12 +299,12 @@ app.post('/interview/create', requireAuth, async (req, res) => {
           customQuestions: validCustomQ || null,
           status: 'created',
           createdAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          expiresAt,
         },
       })
     );
 
-    const interviewLink = `https://d5k7p6fyxagls.cloudfront.net/interview.html?id=${interviewId}`;
+    const interviewLink = `https://d5k7p6fyxagls.cloudfront.net/interview.html?id=${interviewId}&token=${linkToken}`;
 
     // Send invitation email to candidate (non-blocking, non-fatal)
     sendCandidateInvitationEmail(candidateName, candidateEmail, interviewLink).catch(() => {});
@@ -300,7 +317,7 @@ app.post('/interview/create', requireAuth, async (req, res) => {
       interviewLink,
       candidateName,
       candidateEmail,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      expiresAt,
     });
   } catch (error) {
     console.error('Error creating interview:', error);
@@ -335,6 +352,11 @@ app.get('/interview/result/:interviewId', async (req, res) => {
 app.get('/interview/validate/:interviewId', async (req, res) => {
   try {
     const { interviewId } = req.params;
+    const { token } = req.query;
+
+    if (!token || !verifyLinkToken(interviewId, token)) {
+      return res.status(403).json({ error: 'Invalid or missing interview token' });
+    }
 
     const result = await ddb.send(
       new GetCommand({
@@ -467,7 +489,8 @@ app.post('/interview/regenerate/:interviewId', requireAuth, async (req, res) => 
       ExpressionAttributeNames: { '#st': 'status' },
       ExpressionAttributeValues: { ':exp': newExpiry, ':st': 'created', ':now': new Date().toISOString() },
     }));
-    const interviewLink = `https://d5k7p6fyxagls.cloudfront.net/interview.html?id=${interviewId}`;
+    const linkToken = generateLinkToken(interviewId);
+    const interviewLink = `https://d5k7p6fyxagls.cloudfront.net/interview.html?id=${interviewId}&token=${linkToken}`;
     res.json({ success: true, expiresAt: newExpiry, interviewLink });
   } catch (error) {
     console.error('Error regenerating link:', error);
@@ -478,7 +501,7 @@ app.post('/interview/regenerate/:interviewId', requireAuth, async (req, res) => 
 // Existing: Process interview transcript
 app.post('/interview/process', async (req, res) => {
   try {
-    const { meetingId, attendeeId, transcriptText, isInit } = req.body;
+    const { meetingId, attendeeId, transcriptText, isInit, token } = req.body;
 
     if (!meetingId || typeof meetingId !== 'string' || meetingId.length > 100) {
       return res.status(400).json({ error: 'Invalid meetingId' });
@@ -486,6 +509,11 @@ app.post('/interview/process', async (req, res) => {
 
     if (!attendeeId || typeof attendeeId !== 'string' || attendeeId.length > 100) {
       return res.status(400).json({ error: 'Invalid attendeeId' });
+    }
+
+    // Verify signed link token
+    if (!token || !verifyLinkToken(meetingId, token)) {
+      return res.status(403).json({ error: 'Unauthorized: invalid interview token' });
     }
 
     if (transcriptText && transcriptText.length > 5000) {
@@ -576,6 +604,13 @@ wss.on('connection', (ws, req) => {
       if (data.type === 'init') {
         const mid = meetingId || data.meetingId;
         const aid = attendeeId || data.attendeeId;
+
+        // Verify the signed link token before allowing interview to start
+        if (!data.token || !verifyLinkToken(mid, data.token)) {
+          ws.send(JSON.stringify({ type: 'error', error: 'Unauthorized: invalid interview token' }));
+          ws.close(1008, 'Unauthorized');
+          return;
+        }
 
         // Load job description and candidate name from interview metadata
         let jobDescription = null;

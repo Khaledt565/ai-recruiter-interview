@@ -32,6 +32,10 @@
         {
           "name": "SES_FROM_EMAIL",
           "value": "Khaled.twich@hotmail.com"
+        },
+        {
+          "name": "LINK_SECRET",
+          "value": "ai-recruiter-link-secret-v1-eu-central-1"
         }
       ],
       "logConfiguration": {
