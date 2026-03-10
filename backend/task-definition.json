@@ -28,6 +28,10 @@
         {
           "name": "USE_HTTPS",
           "value": "false"
+        },
+        {
+          "name": "SES_FROM_EMAIL",
+          "value": "Khaled.twich@hotmail.com"
         }
       ],
       "logConfiguration": {
