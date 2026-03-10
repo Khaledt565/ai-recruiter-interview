@@ -601,6 +601,7 @@ wss.on('connection', (ws, req) => {
             jobDescription,
             candidateName,
             customQuestions,
+          });
         // Generate audio
         const audioBuffer = await generateSpeech(result.spokenText);
 
