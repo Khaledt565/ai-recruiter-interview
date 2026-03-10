@@ -270,7 +270,9 @@ app.get('/health', (req, res) => {
 // NEW: Create interview link
 app.post('/interview/create', requireAuth, async (req, res) => {
   try {
-    const { candidateName, candidateEmail, recruiterEmail, jobDescription, customQuestions } = req.body;
+    const { candidateName, jobDescription, customQuestions } = req.body;
+    const candidateEmail = (req.body.candidateEmail || '').toLowerCase().trim();
+    const recruiterEmail = (req.body.recruiterEmail || '').toLowerCase().trim();
     const validCustomQ = Array.isArray(customQuestions) && customQuestions.length
       ? customQuestions.filter(q => typeof q === 'string' && q.trim()).slice(0, 5).map(q => q.trim())
       : null;
