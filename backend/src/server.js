@@ -445,6 +445,39 @@ app.get('/interview/sessions', requireAuth, async (req, res) => {
   }
 });
 
+// Get full conversation transcript for a completed interview
+app.get('/interview/transcript/:interviewId', requireAuth, async (req, res) => {
+  try {
+    const { interviewId } = req.params;
+    if (!interviewId || typeof interviewId !== 'string' || interviewId.length > 100) {
+      return res.status(400).json({ error: 'Invalid interview ID' });
+    }
+    const metaRes = await ddb.send(new GetCommand({
+      TableName: SESSION_TABLE,
+      Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' },
+    }));
+    if (!metaRes.Item) return res.status(404).json({ error: 'Interview not found' });
+    if (metaRes.Item.recruiterEmail !== req.recruiterEmail) return res.status(403).json({ error: 'Forbidden' });
+    const { attendeeId } = metaRes.Item;
+    const stateRes = await ddb.send(new GetCommand({
+      TableName: SESSION_TABLE,
+      Key: { pk: `MEETING#${interviewId}`, sk: `ATTENDEE#${attendeeId}` },
+    }));
+    const history = (stateRes.Item || {}).history || [];
+    const conversation = history.map((h, i) => ({
+      turn: i + 1,
+      question: h.q,
+      candidateAnswer: h.a,
+      aiReply: h.reply,
+      timestamp: h.t,
+    }));
+    res.json({ conversation, turns: conversation.length });
+  } catch (error) {
+    console.error('Error fetching transcript:', error);
+    res.status(500).json({ error: 'Failed to fetch transcript' });
+  }
+});
+
 // Archive (soft-delete) an interview
 app.delete('/interview/:interviewId', requireAuth, async (req, res) => {
   try {

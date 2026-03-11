@@ -688,13 +688,23 @@
     }).join('');
   }
 
+  function renderTranscriptContent(s) {
+    var convo = s.conversation || [];
+    if (s.status !== 'completed') {
+      return '<p style="color:var(--muted);font-size:13px;">No transcript available yet.</p>';
+    }
+    if (!convo.length) {
+      return '<div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;"><span class="skeleton" style="width:14px;height:14px;border-radius:50%;flex-shrink:0;"></span> Loading transcript…</div>';
+    }
+    var turns = convo.map(function(t) {
+      return '<div class="t-turn"><div class="t-q">Q' + t.turn + ': ' + esc(t.question || '') + '</div><div class="t-a">' + esc(t.candidateAnswer || '\u2014') + '</div></div>';
+    }).join('');
+    return '<div class="detail-section-title">Transcript (' + convo.length + ' turn' + (convo.length !== 1 ? 's' : '') + ')</div><div class="transcript-list">' + turns + '</div>';
+  }
+
   function buildDetailPanel(s) {
     var strengths = (s.strengths || []).map(function(x) { return '<span class="chip chip-green">\u2713 ' + esc(x) + '</span>'; }).join('');
     var concerns  = (s.concerns  || []).map(function(x) { return '<span class="chip chip-red">\u26A0 '  + esc(x) + '</span>'; }).join('');
-    var convo = s.conversation || [];
-    var transcript = convo.map(function(t) {
-      return '<div class="t-turn"><div class="t-q">Q' + t.turn + ': ' + esc(t.question || '') + '</div><div class="t-a">' + esc(t.candidateAnswer || '\u2014') + '</div></div>';
-    }).join('');
     var score = s.score != null ? s.score : null;
     var scorePct = score != null ? (score / 10) * 100 : 0;
     var barColor = score >= 7 ? '#10b981' : score >= 5 ? '#f59e0b' : score != null ? '#ef4444' : '#d1d5db';
@@ -743,7 +753,7 @@
         (!s.summary && !strengths ? '<p style="color:var(--muted);font-size:13px;">AI analysis available for completed interviews.</p>' : '') +
       '</div>' +
       '<div>' +
-        (transcript ? '<div class="detail-section-title">Transcript (' + convo.length + ' turns)</div><div class="transcript-list">' + transcript + '</div>' : '<p style="color:var(--muted);font-size:13px;">No transcript available.</p>') +
+        '<div id="transcript-' + s.interviewId + '">' + renderTranscriptContent(s) + '</div>' +
       '</div>' +
     '</div>' + actions;
   }
@@ -761,6 +771,25 @@
     detailRow.classList.toggle('open', !isOpen);
     mainRow.classList.toggle('expanded', !isOpen);
     expandedRow = isOpen ? null : id;
+    if (!isOpen) {
+      var s = allSessions.find(function(x) { return x.interviewId === id; });
+      if (s && s.status === 'completed' && !s.conversation) fetchTranscript(id);
+    }
+  }
+
+  function fetchTranscript(id) {
+    fetch(BACKEND_URL + '/interview/transcript/' + id, { headers: authHeaders() })
+      .then(function(res) { if (!res.ok) throw new Error('Failed'); return res.json(); })
+      .then(function(data) {
+        var s = allSessions.find(function(x) { return x.interviewId === id; });
+        if (s) s.conversation = data.conversation || [];
+        var el = document.getElementById('transcript-' + id);
+        if (el && s) el.innerHTML = renderTranscriptContent(s);
+      })
+      .catch(function() {
+        var el = document.getElementById('transcript-' + id);
+        if (el) el.innerHTML = '<p style="color:#dc2626;font-size:13px;">\u274C Failed to load transcript.</p>';
+      });
   }
 
   function setFilter(el) {
