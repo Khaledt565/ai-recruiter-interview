@@ -1,5 +1,5 @@
-// backend/src/bedrock-client.js
-// All AWS Bedrock / Claude AI calls — knows nothing about sessions or HTTP
+﻿// backend/src/bedrock-client.js
+// All AWS Bedrock / Claude AI calls â€” knows nothing about sessions or HTTP
 
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 import { SYSTEM_PROMPT, BEDROCK_MODEL_ID } from "./prompts.js";
@@ -19,7 +19,7 @@ function parseBedrockResponse(resp) {
 
 // Decide how to respond to a candidate's answer
 export async function callBedrockPolicy({ userText, currentQuestion }) {
-  console.log(`[Bedrock] callBedrockPolicy — question: "${currentQuestion.slice(0, 60)}…", answer: "${userText.slice(0, 60)}${userText.length > 60 ? '…' : ''}"`); 
+  console.log(`[Bedrock] callBedrockPolicy â€” question: "${currentQuestion.slice(0, 60)}â€¦", answer: "${userText.slice(0, 60)}${userText.length > 60 ? 'â€¦' : ''}"`);
   const body = {
     anthropic_version: "bedrock-2023-05-31",
     max_tokens: 220,
@@ -37,13 +37,13 @@ export async function callBedrockPolicy({ userText, currentQuestion }) {
     body: JSON.stringify(body),
   }));
   const result = JSON.parse(parseBedrockResponse(resp) || "{}");
-  console.log(`[Bedrock] callBedrockPolicy — result: action=${result.action}, advance=${result.advance}`);
+  console.log(`[Bedrock] callBedrockPolicy â€” result: action=${result.action}, advance=${result.advance}`);
   return result;
 }
 
 // Generate 3 middle interview questions from a job description (greeting and closing are always fixed by the engine)
 export async function generateQuestionsFromJD(jobDescription, candidateName) {
-  console.log(`[Bedrock] generateQuestionsFromJD — candidate: "${candidateName}", JD length: ${jobDescription.length} chars`);
+  console.log(`[Bedrock] generateQuestionsFromJD â€” candidate: "${candidateName}", JD length: ${jobDescription.length} chars`);
   try {
     const body = {
       anthropic_version: "bedrock-2023-05-31",
@@ -51,7 +51,7 @@ export async function generateQuestionsFromJD(jobDescription, candidateName) {
       temperature: 0.3,
       messages: [{
         role: "user",
-        content: `Generate exactly 3 conversational voice interview questions for ${candidateName} based on this job description:\n\n${jobDescription}\n\nRules:\n- Do NOT include a greeting or icebreaker — that is handled separately\n- Do NOT include a closing "do you have any questions" question — that is handled separately\n- Focus on role-specific skills, motivation, experience, and salary expectations\n- Each question must be short (1-2 sentences), spoken naturally as voice dialogue\n- Return ONLY a JSON array of exactly 3 strings, no other text`,
+        content: `Generate exactly 3 conversational voice interview questions for ${candidateName} based on this job description:\n\n${jobDescription}\n\nRules:\n- Do NOT include a greeting or icebreaker â€” that is handled separately\n- Do NOT include a closing "do you have any questions" question â€” that is handled separately\n- Focus on role-specific skills, motivation, experience, and salary expectations\n- Each question must be short (1-2 sentences), spoken naturally as voice dialogue\n- Return ONLY a JSON array of exactly 3 strings, no other text`,
       }],
     };
     const resp = await bedrock.send(new InvokeModelCommand({
@@ -63,19 +63,19 @@ export async function generateQuestionsFromJD(jobDescription, candidateName) {
     const text = extractJsonText(parseBedrockResponse(resp) || "[]");
     const questions = JSON.parse(text);
     if (Array.isArray(questions) && questions.length >= 1) {
-      console.log(`[Bedrock] generateQuestionsFromJD — generated ${questions.length} question(s)`);
+      console.log(`[Bedrock] generateQuestionsFromJD â€” generated ${questions.length} question(s)`);
       return questions;
     }
-    console.warn(`[Bedrock] generateQuestionsFromJD — unexpected response shape`);
+    console.warn(`[Bedrock] generateQuestionsFromJD â€” unexpected response shape`);
   } catch (err) {
-    console.error(`[Bedrock] generateQuestionsFromJD — failed:`, err.message);
+    console.error(`[Bedrock] generateQuestionsFromJD â€” failed:`, err.message);
   }
   return null;
 }
 
 // Generate 3 suggested questions from a CV/JD for the recruiter to pick from
 export async function suggestQuestionsFromCV(text) {
-  console.log(`[Bedrock] suggestQuestionsFromCV — input length: ${text.length} chars`);
+  console.log(`[Bedrock] suggestQuestionsFromCV â€” input length: ${text.length} chars`);
   const body = {
     anthropic_version: "bedrock-2023-05-31",
     max_tokens: 600,
@@ -94,14 +94,56 @@ export async function suggestQuestionsFromCV(text) {
   const cleaned = extractJsonText(parseBedrockResponse(resp) || "[]");
   const questions = JSON.parse(cleaned);
   if (!Array.isArray(questions) || !questions.length) throw new Error("Invalid response format");
-  console.log(`[Bedrock] suggestQuestionsFromCV — returning ${Math.min(questions.length, 3)} suggestion(s)`);
+  console.log(`[Bedrock] suggestQuestionsFromCV â€” returning ${Math.min(questions.length, 3)} suggestion(s)`);
   return questions.slice(0, 3);
+}
+
+// Score a seeker's profile/CV against a job description â€” returns { score: 0-100, reasoning: string }
+export async function scoreProfileWithAI(jobDescription, seekerProfile) {
+  console.log(`[Bedrock] scoreProfileWithAI â€” JD length: ${jobDescription.length}, profile length: ${seekerProfile.length}`);
+  try {
+    const body = {
+      anthropic_version: "bedrock-2023-05-31",
+      max_tokens: 300,
+      temperature: 0.1,
+      messages: [{
+        role: "user",
+        content: `You are a recruiter screening a job applicant. Score how well the candidate's profile matches the job description.
+
+Job Description:
+${jobDescription.slice(0, 3000)}
+
+Candidate Profile / CV:
+${seekerProfile.slice(0, 3000)}
+
+Return ONLY valid JSON with these exact keys:
+- score: integer 0-100 (0 = completely unqualified, 100 = perfect match)
+- reasoning: string (1-2 sentences explaining the score)
+
+No other text.`,
+      }],
+    };
+    const resp = await bedrock.send(new InvokeModelCommand({
+      modelId: BEDROCK_MODEL_ID,
+      contentType: "application/json",
+      accept: "application/json",
+      body: JSON.stringify(body),
+    }));
+    const text = extractJsonText(parseBedrockResponse(resp) || "{}");
+    const result = JSON.parse(text);
+    const score = Math.max(0, Math.min(100, Math.round(Number(result.score))));
+    console.log(`[Bedrock] scoreProfileWithAI â€” score: ${score}/100`);
+    return { score, reasoning: result.reasoning || "" };
+  } catch (err) {
+    console.error(`[Bedrock] scoreProfileWithAI â€” failed:`, err.message);
+    return { score: 0, reasoning: "Scoring failed" };
+  }
 }
 
 // Generate an AI assessment after the interview completes
 export async function generateCandidateSummary(history, candidateName, jobDescription) {
   if (!history || history.length === 0) return null;
-  console.log(`[Bedrock] generateCandidateSummary — candidate: "${candidateName}", ${history.length} turn(s), hasJD: ${!!jobDescription}`);
+  console.log(`[Bedrock] generateCandidateSummary â€” candidate: "${candidateName}", ${history.length} turn(s), hasJD: ${!!jobDescription}`);
   const transcript = history.map((h, i) => `Q${i + 1}: ${h.q}\nCandidate: ${h.a}`).join("\n\n");
   const jobContext = jobDescription ? `Job Description:\n${jobDescription}\n\n` : "";
   const body = {
@@ -121,6 +163,6 @@ export async function generateCandidateSummary(history, candidateName, jobDescri
   }));
   const text = extractJsonText(parseBedrockResponse(resp) || "{}");
   const summary = JSON.parse(text);
-  console.log(`[Bedrock] generateCandidateSummary — recommendation: ${summary.recommendation}, score: ${summary.score}/10`);
+  console.log(`[Bedrock] generateCandidateSummary â€” recommendation: ${summary.recommendation}, score: ${summary.score}/10`);
   return summary;
 }

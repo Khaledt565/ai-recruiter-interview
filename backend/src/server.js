@@ -1,4 +1,4 @@
-// backend/src/server.js
+﻿// backend/src/server.js
 // Fargate Express server with WebSocket support + Interview Link Generation
 
 import express from 'express';
@@ -11,9 +11,9 @@ import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { processTranscript, generateCandidateSummary } from './interview-engine.js';
-import { suggestQuestionsFromCV } from './bedrock-client.js';
+import { suggestQuestionsFromCV, scoreProfileWithAI } from './bedrock-client.js';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
@@ -25,8 +25,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 8080;
 const REGION = process.env.AWS_REGION || 'eu-central-1';
-const SESSION_TABLE = process.env.SESSION_TABLE || 'InterviewSessions';
-const COGNITO_USER_POOL_ID = process.env.COGNITO_USER_POOL_ID || 'eu-central-1_JbO8lhpi2';
+const SESSION_TABLE           = process.env.SESSION_TABLE            || 'InterviewSessions';
+const JOBS_TABLE              = process.env.JOBS_TABLE               || 'Jobs-dev';
+const APPLICATIONS_TABLE      = process.env.APPLICATIONS_TABLE       || 'Applications-dev';
+const AI_SESSIONS_TABLE       = process.env.AI_SESSIONS_TABLE        || 'AIInterviewSessions-dev';
+const QUESTION_TEMPLATES_TABLE = process.env.QUESTION_TEMPLATES_TABLE || 'QuestionTemplates-dev';
+const COGNITO_USER_POOL_ID    = process.env.COGNITO_USER_POOL_ID     || 'eu-central-1_JbO8lhpi2';
 
 const polly = new PollyClient({ region: REGION });
 const s3 = new S3Client({ region: REGION });
@@ -97,9 +101,9 @@ async function saveInterviewSnapshot(meetingId, attendeeId, status) {
           meta.candidateName || 'Unknown',
           state.jobDescription || meta.jobDescription || null,
         );
-        console.log(`✅ AI summary generated for ${meetingId}: ${aiSummary?.recommendation} (${aiSummary?.score}/10)`);
+        console.log(`âœ… AI summary generated for ${meetingId}: ${aiSummary?.recommendation} (${aiSummary?.score}/10)`);
       } catch (err) {
-        console.error('❌ Failed to generate AI summary:', err);
+        console.error('âŒ Failed to generate AI summary:', err);
       }
     }
 
@@ -134,7 +138,7 @@ async function saveInterviewSnapshot(meetingId, attendeeId, status) {
       ServerSideEncryption: 'AES256',
     }));
 
-    // Build DynamoDB update expression — optionally store AI summary fields
+    // Build DynamoDB update expression â€” optionally store AI summary fields
     let updateExpr = 'SET #st = :status, updatedAt = :now';
     const exprNames = { '#st': 'status' };
     const exprValues = { ':status': status, ':now': new Date().toISOString() };
@@ -158,9 +162,9 @@ async function saveInterviewSnapshot(meetingId, attendeeId, status) {
       await sendRecruiterEmail(meta.recruiterEmail, meta.candidateName, aiSummary, meetingId);
     }
 
-    console.log(`✅ Interview snapshot saved (${meetingId}, status: ${status}, turns: ${snapshot.conversation.length})`);
+    console.log(`âœ… Interview snapshot saved (${meetingId}, status: ${status}, turns: ${snapshot.conversation.length})`);
   } catch (err) {
-    console.error('❌ Failed to save interview snapshot:', err);
+    console.error('âŒ Failed to save interview snapshot:', err);
   }
 }
 
@@ -176,7 +180,7 @@ async function sendCandidateInvitationEmail(candidateName, candidateEmail, inter
       <p style="color:rgba(255,255,255,0.8);font-size:14px;margin:0;">Hello ${candidateName}, a recruiter has set up an AI-powered interview for you.</p>
     </div>
     <div style="padding:28px 36px;">
-      <p style="color:#374151;font-size:14px;line-height:1.7;margin:0 0 20px;">Click the button below to begin your interview. The AI interviewer will guide you through a series of questions — just speak naturally into your microphone.</p>
+      <p style="color:#374151;font-size:14px;line-height:1.7;margin:0 0 20px;">Click the button below to begin your interview. The AI interviewer will guide you through a series of questions â€” just speak naturally into your microphone.</p>
       <div style="text-align:center;margin:24px 0;">
         <a href="${interviewLink}" style="display:inline-block;background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;text-decoration:none;font-weight:700;font-size:16px;padding:16px 36px;border-radius:10px;letter-spacing:0.01em;">&#128279; Click Here to Join Your Interview</a>
       </div>
@@ -201,16 +205,16 @@ async function sendCandidateInvitationEmail(candidateName, candidateEmail, inter
       Source: SES_FROM_EMAIL,
       Destination: { ToAddresses: [candidateEmail] },
       Message: {
-        Subject: { Data: `Your AI Interview is Ready — ${candidateName}` },
+        Subject: { Data: `Your AI Interview is Ready â€” ${candidateName}` },
         Body: {
           Html: { Data: htmlBody },
           Text: { Data: `Hello ${candidateName},\n\nYou have been invited to an AI-powered interview.\n\nClick this link to begin:\n${interviewLink}\n\nThe link is valid for 7 days and can only be used once.\n\nGood luck!` },
         },
       },
     }));
-    console.log(`✅ Invitation email sent to ${candidateEmail}`);
+    console.log(`âœ… Invitation email sent to ${candidateEmail}`);
   } catch (err) {
-    console.error('❌ Failed to send invitation email (non-fatal):', err.message);
+    console.error('âŒ Failed to send invitation email (non-fatal):', err.message);
   }
 }
 
@@ -219,8 +223,8 @@ async function sendRecruiterEmail(recruiterEmail, candidateName, summary, interv
     const rec = summary?.recommendation || 'N/A';
     const score = summary?.score != null ? `${summary.score}/10` : 'N/A';
     const summaryText = summary?.summary || 'No summary available.';
-    const strengths = (summary?.strengths || []).map(s => `  • ${s}`).join('\n');
-    const concerns = (summary?.concerns || []).map(c => `  • ${c}`).join('\n');
+    const strengths = (summary?.strengths || []).map(s => `  â€¢ ${s}`).join('\n');
+    const concerns = (summary?.concerns || []).map(c => `  â€¢ ${c}`).join('\n');
 
     const bodyLines = [
       `Interview completed: ${candidateName}`,
@@ -240,13 +244,44 @@ async function sendRecruiterEmail(recruiterEmail, candidateName, summary, interv
       Source: SES_FROM_EMAIL,
       Destination: { ToAddresses: [recruiterEmail] },
       Message: {
-        Subject: { Data: `Interview Complete: ${candidateName} — ${rec}` },
+        Subject: { Data: `Interview Complete: ${candidateName} â€” ${rec}` },
         Body: { Text: { Data: bodyLines.join('\n') } },
       },
     }));
-    console.log(`✅ Recruiter email sent to ${recruiterEmail}`);
+    console.log(`âœ… Recruiter email sent to ${recruiterEmail}`);
   } catch (err) {
-    console.error('❌ Failed to send recruiter email (non-fatal):', err.message);
+    console.error('âŒ Failed to send recruiter email (non-fatal):', err.message);
+  }
+}
+
+// â”€â”€ Low-score recruiter notification email â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+async function sendRecruiterLowScoreEmail(recruiterEmail, candidateName, jobTitle, score, applicationId) {
+  if (!SES_FROM_EMAIL || !recruiterEmail) return;
+  try {
+    await ses.send(new SendEmailCommand({
+      Source: SES_FROM_EMAIL,
+      Destination: { ToAddresses: [recruiterEmail] },
+      Message: {
+        Subject: { Data: `New Application: ${candidateName} â€” ${score}/100 (below threshold)` },
+        Body: {
+          Text: {
+            Data: [
+              `A new application has arrived for: ${jobTitle}`,
+              ``,
+              `Candidate:      ${candidateName}`,
+              `AI Profile Score: ${score}/100`,
+              `Application ID: ${applicationId}`,
+              ``,
+              `This candidate scored below your threshold and has NOT been automatically invited to interview.`,
+              `You can manually review and invite them from your recruiter dashboard.`,
+            ].join('\n'),
+          },
+        },
+      },
+    }));
+    console.log(`âœ… Low-score recruiter notification sent to ${recruiterEmail}`);
+  } catch (err) {
+    console.error('âŒ Failed to send low-score notification (non-fatal):', err.message);
   }
 }
 
@@ -258,11 +293,177 @@ const limiter = rateLimit({
 });
 
 app.use('/interview', limiter);
+app.use('/applications', limiter);
+
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// POST /applications â€” seeker submits application, AI scores profile, auto-
+// invites if above threshold, otherwise notifies recruiter of low-score app.
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+app.post('/applications', async (req, res) => {
+  try {
+    const { jobId, seekerId, candidateName, candidateEmail, cvText, coverLetter } = req.body;
+
+    // â”€â”€ 1. Validate input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    if (!jobId || !seekerId || !candidateName || !candidateEmail || !cvText) {
+      return res.status(400).json({ error: 'jobId, seekerId, candidateName, candidateEmail, and cvText are required' });
+    }
+    if (typeof cvText !== 'string' || cvText.length > 20000) {
+      return res.status(400).json({ error: 'cvText must be a string under 20000 characters' });
+    }
+
+    // â”€â”€ 2. Load job record â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    const jobRes = await ddb.send(new QueryCommand({
+      TableName: JOBS_TABLE,
+      IndexName: 'JobsByJobId',
+      KeyConditionExpression: 'jobId = :jid',
+      ExpressionAttributeValues: { ':jid': jobId },
+      Limit: 1,
+    }));
+    const job = jobRes.Items && jobRes.Items[0];
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    if (job.status !== 'open') return res.status(400).json({ error: 'Job is not accepting applications' });
+
+    const scoreThreshold = typeof job.scoreThreshold === 'number' ? job.scoreThreshold : 50;
+    const interviewMode  = job.interviewMode || 'auto';   // auto | template | custom
+    const jobDescription = job.description || '';
+    const recruiterEmail = job.recruiterId || '';         // stored as recruiter email in recruiterId field
+    const jobTitle       = job.title || 'this role';
+
+    // â”€â”€ 3. AI profile scoring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    const { score: aiProfileScore, reasoning } = await scoreProfileWithAI(jobDescription, cvText);
+    console.log(`[Applications] ${candidateName} scored ${aiProfileScore}/100 (threshold: ${scoreThreshold})`);
+
+    // â”€â”€ 4. Save application record â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    const applicationId   = `app_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const now             = new Date().toISOString();
+    const initialStatus   = aiProfileScore >= scoreThreshold ? 'interview_invited' : 'applied';
+
+    await ddb.send(new PutCommand({
+      TableName: APPLICATIONS_TABLE,
+      Item: {
+        pk: `JOB#${jobId}`,
+        sk: `APPLICATION#${applicationId}`,
+        applicationId,
+        jobId,
+        seekerId,
+        recruiterId: recruiterEmail,
+        candidateName,
+        candidateEmail: candidateEmail.toLowerCase().trim(),
+        coverLetter: coverLetter || null,
+        cvText,
+        aiProfileScore,
+        aiProfileReasoning: reasoning,
+        status: initialStatus,
+        recommended: false,
+        appliedAt: now,
+        updatedAt: now,
+      },
+    }));
+
+    // â”€â”€ 5. Below threshold â€” notify recruiter and return â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    if (aiProfileScore < scoreThreshold) {
+      sendRecruiterLowScoreEmail(recruiterEmail, candidateName, jobTitle, aiProfileScore, applicationId).catch(() => {});
+      return res.status(201).json({
+        applicationId,
+        status: 'applied',
+        aiProfileScore,
+        message: 'Application received. Score is below the auto-invite threshold.',
+      });
+    }
+
+    // â”€â”€ 6. Resolve interview questions based on interviewMode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    let customQuestions = null;
+
+    if (interviewMode === 'template' && job.questionTemplateId) {
+      const tplRes = await ddb.send(new QueryCommand({
+        TableName: QUESTION_TEMPLATES_TABLE,
+        IndexName: 'TemplateById',
+        KeyConditionExpression: 'templateId = :tid',
+        ExpressionAttributeValues: { ':tid': job.questionTemplateId },
+        Limit: 1,
+      }));
+      const tpl = tplRes.Items && tplRes.Items[0];
+      if (tpl && Array.isArray(tpl.questions) && tpl.questions.length) {
+        customQuestions = tpl.questions.slice(0, 10);
+        console.log(`[Applications] Loaded ${customQuestions.length} template questions`);
+      }
+    } else if (interviewMode === 'custom' && Array.isArray(job.customQuestions) && job.customQuestions.length) {
+      customQuestions = job.customQuestions.slice(0, 10);
+      console.log(`[Applications] Using ${customQuestions.length} custom questions from job`);
+    }
+    // interviewMode === 'auto': leave customQuestions null â€” engine calls generateQuestionsFromJD on init
+
+    // â”€â”€ 7. Create interview session records â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    const interviewId = `int_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const attendeeId  = `att_${Math.random().toString(36).substr(2, 9)}`;
+    const sessionId   = `sess_${Math.random().toString(36).substr(2, 9)}`;
+    const linkToken   = generateLinkToken(interviewId);
+    const expiresAt   = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // AIInterviewSessions table â€” links session back to this application
+    await ddb.send(new PutCommand({
+      TableName: AI_SESSIONS_TABLE,
+      Item: {
+        pk: `APPLICATION#${applicationId}`,
+        sk: `SESSION#${sessionId}`,
+        sessionId,
+        applicationId,
+        interviewId,
+        inviteToken: linkToken,
+        mode: interviewMode,
+        state: 'pending',
+        expiresAt,
+        scheduledAt: now,
+        startedAt: null,
+        completedAt: null,
+      },
+    }));
+
+    // Existing InterviewSessions META record â€” required by existing interview engine
+    await ddb.send(new PutCommand({
+      TableName: SESSION_TABLE,
+      Item: {
+        pk: `INTERVIEW#${interviewId}`,
+        sk: 'META',
+        interviewId,
+        attendeeId,
+        candidateName,
+        candidateEmail: candidateEmail.toLowerCase().trim(),
+        recruiterEmail,
+        jobDescription: jobDescription || null,
+        customQuestions: customQuestions || null,
+        applicationId,
+        status: 'created',
+        createdAt: now,
+        expiresAt,
+      },
+    }));
+
+    // â”€â”€ 8. Send invitation email to candidate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    const interviewLink = `https://d5k7p6fyxagls.cloudfront.net/interview.html?id=${interviewId}&token=${linkToken}`;
+    sendCandidateInvitationEmail(candidateName, candidateEmail, interviewLink).catch(() => {});
+
+    console.log(`âœ… Auto-invited ${candidateName} (score ${aiProfileScore}/100, mode: ${interviewMode})`);
+
+    res.status(201).json({
+      applicationId,
+      interviewId,
+      interviewLink,
+      status: 'interview_invited',
+      aiProfileScore,
+      interviewMode,
+      expiresAt,
+    });
+  } catch (error) {
+    console.error('Error processing application:', error);
+    res.status(500).json({ error: 'Failed to process application' });
+  }
+});
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
+  res.json({
+    status: 'healthy',
     timestamp: new Date().toISOString(),
     version: '2.0.0',
     message: 'GitHub Actions deployment - credentials corrected'
@@ -328,7 +529,7 @@ app.post('/interview/create', requireAuth, async (req, res) => {
     // Send invitation email to candidate (non-blocking, non-fatal)
     sendCandidateInvitationEmail(candidateName, candidateEmail, interviewLink).catch(() => {});
 
-    console.log(`✅ Created interview link for ${candidateName}`);
+    console.log(`âœ… Created interview link for ${candidateName}`);
 
     res.json({
       interviewId,
@@ -586,7 +787,7 @@ app.post('/interview/process', async (req, res) => {
         jobDescription = metaRes.Item?.jobDescription || null;
         candidateName = metaRes.Item?.candidateName || null;
         customQuestions = metaRes.Item?.customQuestions || null;
-        console.log(`[/process] init — candidate: "${candidateName}", hasJD: ${!!jobDescription}, customQs: ${customQuestions?.length || 0}`);
+        console.log(`[/process] init â€” candidate: "${candidateName}", hasJD: ${!!jobDescription}, customQs: ${customQuestions?.length || 0}`);
       } catch (err) {
         console.error('[/process] Failed to load interview metadata:', err.message);
       }
@@ -633,14 +834,14 @@ if (USE_HTTPS) {
   };
   server = https.createServer(options, app);
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Interview server running SECURELY on https://0.0.0.0:${PORT}`);
-    console.log(`📝 Certificate: ${certPath}`);
+    console.log(`ðŸš€ Interview server running SECURELY on https://0.0.0.0:${PORT}`);
+    console.log(`ðŸ“ Certificate: ${certPath}`);
   });
 } else {
   // Development/Testing: Use HTTP
-  console.warn('⚠️  Using HTTP (development mode)');
+  console.warn('âš ï¸  Using HTTP (development mode)');
   server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Interview server running on http://0.0.0.0:${PORT}`);
+    console.log(`ðŸš€ Interview server running on http://0.0.0.0:${PORT}`);
   });
 }
 
