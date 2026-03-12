@@ -660,6 +660,150 @@ app.get('/applications/:applicationId/report', requireAuth, async (req, res) => 
   }
 });
 
+// ── GET /jobs ─────────────────────────────────────────────────────────
+app.get('/jobs', requireAuth, async (req, res) => {
+  try {
+    const result = await ddb.send(new QueryCommand({
+      TableName: JOBS_TABLE,
+      KeyConditionExpression: 'pk = :pk',
+      ExpressionAttributeValues: { ':pk': `RECRUITER#${req.recruiterEmail}` },
+      ScanIndexForward: false,
+    }));
+    res.json({ jobs: result.Items || [] });
+  } catch (error) {
+    console.error('Error listing jobs:', error);
+    res.status(500).json({ error: 'Failed to list jobs' });
+  }
+});
+
+// ── POST /jobs ────────────────────────────────────────────────────────
+app.post('/jobs', requireAuth, async (req, res) => {
+  try {
+    const {
+      title, description, requirements, location, employmentType,
+      salaryMin, salaryMax, salaryCurrency,
+      scoreThreshold, recommendationThreshold,
+      interviewMode, questionTemplateId, customQuestions, status,
+    } = req.body;
+
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      return res.status(400).json({ error: 'title is required' });
+    }
+    if (!description || typeof description !== 'string' || !description.trim()) {
+      return res.status(400).json({ error: 'description is required' });
+    }
+    if (typeof description === 'string' && description.length > 30000) {
+      return res.status(400).json({ error: 'description is too long' });
+    }
+
+    const validStatuses = ['draft', 'open', 'paused', 'closed'];
+    const validModes = ['auto', 'template', 'custom'];
+    if (status && !validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+    if (interviewMode && !validModes.includes(interviewMode)) {
+      return res.status(400).json({ error: 'Invalid interviewMode' });
+    }
+    if (Array.isArray(customQuestions) && customQuestions.length > 10) {
+      return res.status(400).json({ error: 'Maximum 10 custom questions' });
+    }
+
+    const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const now = new Date().toISOString();
+    const jobStatus = validStatuses.includes(status) ? status : 'draft';
+    const mode = validModes.includes(interviewMode) ? interviewMode : 'auto';
+
+    await ddb.send(new PutCommand({
+      TableName: JOBS_TABLE,
+      Item: {
+        pk: `RECRUITER#${req.recruiterEmail}`,
+        sk: `JOB#${jobId}`,
+        jobId,
+        recruiterId: req.recruiterEmail,
+        title: title.trim(),
+        description: description.trim(),
+        requirements: Array.isArray(requirements) ? requirements.map(r => String(r).trim()).filter(Boolean) : [],
+        location: location ? String(location).trim() : null,
+        employmentType: ['full-time', 'part-time', 'contract'].includes(employmentType) ? employmentType : 'full-time',
+        salaryRange: (salaryMin != null || salaryMax != null) ? {
+          min: typeof salaryMin === 'number' ? salaryMin : null,
+          max: typeof salaryMax === 'number' ? salaryMax : null,
+          currency: ['GBP', 'USD', 'EUR'].includes(salaryCurrency) ? salaryCurrency : 'GBP',
+        } : null,
+        scoreThreshold: typeof scoreThreshold === 'number' ? Math.min(100, Math.max(0, Math.round(scoreThreshold))) : 65,
+        recommendationThreshold: typeof recommendationThreshold === 'number' ? Math.min(100, Math.max(0, Math.round(recommendationThreshold))) : 75,
+        interviewMode: mode,
+        questionTemplateId: mode === 'template' ? (questionTemplateId || null) : null,
+        customQuestions: mode === 'custom' && Array.isArray(customQuestions)
+          ? customQuestions.map(q => String(q).trim()).filter(Boolean)
+          : null,
+        status: jobStatus,
+        createdAt: now,
+        updatedAt: now,
+      },
+    }));
+
+    console.log(`[Jobs] Created job "${title.trim()}" (${jobId}) status=${jobStatus} by ${req.recruiterEmail}`);
+    res.status(201).json({ jobId, status: jobStatus });
+  } catch (error) {
+    console.error('Error creating job:', error);
+    res.status(500).json({ error: 'Failed to create job' });
+  }
+});
+
+// ── GET /question-templates ───────────────────────────────────────────
+app.get('/question-templates', requireAuth, async (req, res) => {
+  try {
+    const result = await ddb.send(new QueryCommand({
+      TableName: QUESTION_TEMPLATES_TABLE,
+      KeyConditionExpression: 'pk = :pk',
+      ExpressionAttributeValues: { ':pk': `RECRUITER#${req.recruiterEmail}` },
+    }));
+    res.json({ templates: result.Items || [] });
+  } catch (error) {
+    console.error('Error listing question templates:', error);
+    res.status(500).json({ error: 'Failed to list question templates' });
+  }
+});
+
+// ── POST /question-templates ──────────────────────────────────────────
+app.post('/question-templates', requireAuth, async (req, res) => {
+  try {
+    const { name, questions } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+    if (!Array.isArray(questions) || !questions.length) {
+      return res.status(400).json({ error: 'questions must be a non-empty array' });
+    }
+    const cleanedQuestions = questions.map(q => String(q).trim()).filter(Boolean).slice(0, 10);
+    if (!cleanedQuestions.length) {
+      return res.status(400).json({ error: 'No valid questions provided' });
+    }
+
+    const templateId = `tpl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const now = new Date().toISOString();
+    await ddb.send(new PutCommand({
+      TableName: QUESTION_TEMPLATES_TABLE,
+      Item: {
+        pk: `RECRUITER#${req.recruiterEmail}`,
+        sk: `TEMPLATE#${templateId}`,
+        templateId,
+        recruiterId: req.recruiterEmail,
+        name: name.trim(),
+        questions: cleanedQuestions,
+        isDefault: false,
+        createdAt: now,
+        updatedAt: now,
+      },
+    }));
+    res.status(201).json({ templateId, name: name.trim() });
+  } catch (error) {
+    console.error('Error creating question template:', error);
+    res.status(500).json({ error: 'Failed to create question template' });
+  }
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({

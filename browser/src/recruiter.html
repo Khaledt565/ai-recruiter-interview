@@ -306,6 +306,77 @@
     .sp-chip-green { background: #d1fae5; color: #065f46; }
     .sp-chip-red { background: #fee2e2; color: #991b1b; }
     .sp-loading { color: var(--muted); font-size: 13px; text-align: center; padding: 40px 0; }
+    /* ── Job Posting Form ─────────────────────────────────────────────── */
+    .job-form-layout { display: grid; grid-template-columns: 1fr 340px; gap: 24px; }
+    .section-card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); margin-bottom: 20px; }
+    .section-card-hdr { padding: 16px 20px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+    .section-card-hdr h3 { font-size: 15px; font-weight: 700; color: var(--text); flex: 1; margin: 0; }
+    .section-icon { font-size: 18px; flex-shrink: 0; }
+    .section-card-body { padding: 20px; }
+    /* Tag input */
+    .tag-input-wrap { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 7px 10px; border: 1.5px solid var(--border); border-radius: 8px; min-height: 42px; cursor: text; background: #fff; transition: border-color 0.15s, box-shadow 0.15s; }
+    .tag-input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .tag { display: inline-flex; align-items: center; gap: 4px; background: #eef2ff; color: #3730a3; font-size: 12px; font-weight: 600; padding: 3px 8px 3px 10px; border-radius: 20px; line-height: 1.4; }
+    .tag-remove { background: none; border: none; cursor: pointer; color: #818cf8; font-size: 14px; line-height: 1; padding: 0; display: flex; align-items: center; transition: color 0.1s; }
+    .tag-remove:hover { color: #dc2626; }
+    .tag-text-input { border: none; outline: none; font-family: inherit; font-size: 13px; min-width: 100px; flex: 1; background: transparent; color: var(--text); }
+    /* Rich text editor */
+    .rich-toolbar-wrap { border-radius: 8px; overflow: hidden; border: 1.5px solid var(--border); transition: border-color 0.15s, box-shadow 0.15s; }
+    .rich-toolbar-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .rich-toolbar { display: flex; gap: 3px; padding: 6px 8px; background: #f9fafb; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .rt-btn { background: none; border: 1px solid transparent; border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: 600; padding: 4px 8px; color: var(--text); transition: all 0.12s; line-height: 1.3; font-family: inherit; }
+    .rt-btn:hover { background: #e5e7eb; border-color: #d1d5db; }
+    .rich-editor { padding: 12px 14px; min-height: 130px; font-size: 14px; line-height: 1.6; color: var(--text); outline: none; background: #fff; }
+    .rich-editor.empty::before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; }
+    .rich-editor p { margin: 0 0 8px; } .rich-editor ul, .rich-editor ol { padding-left: 20px; margin: 0 0 8px; }
+    /* Sliders */
+    .threshold-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .threshold-label { font-size: 13px; font-weight: 600; color: var(--text); }
+    .threshold-val { font-size: 18px; font-weight: 800; color: var(--accent); min-width: 32px; text-align: right; }
+    .threshold-hint { font-size: 12px; color: var(--muted); margin-top: 7px; line-height: 1.4; }
+    input[type=range].threshold-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 4px; background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--val, 50%), #e5e7eb var(--val, 50%), #e5e7eb 100%); outline: none; cursor: pointer; display: block; }
+    input[type=range].threshold-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(99,102,241,0.35); cursor: pointer; }
+    input[type=range].threshold-slider::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(99,102,241,0.35); cursor: pointer; border: none; }
+    /* Interview mode cards */
+    .mode-opts { display: flex; gap: 10px; margin-top: 6px; }
+    .mode-opt { flex: 1; }
+    .mode-opt input[type=radio] { display: none; }
+    .mode-opt label { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 12px 8px; border: 2px solid var(--border); border-radius: 10px; cursor: pointer; transition: all 0.15s; text-align: center; }
+    .mode-opt label:hover { border-color: var(--accent-light); background: #f5f3ff; }
+    .mode-opt input:checked + label { border-color: var(--accent); background: #eef2ff; }
+    .mo-icon { font-size: 22px; }
+    .mo-title { font-size: 12.5px; font-weight: 700; color: var(--text); }
+    .mo-desc { font-size: 11px; color: var(--muted); line-height: 1.3; }
+    /* Question builder */
+    .q-builder { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .q-item { display: flex; gap: 8px; align-items: center; }
+    .q-item-num { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: #eef2ff; color: var(--accent); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .q-item input { flex: 1; padding: 8px 11px; border: 1.5px solid var(--border); border-radius: 7px; font-size: 13px; font-family: inherit; color: var(--text); outline: none; transition: border-color 0.15s; }
+    .q-item input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
+    .q-remove-btn { flex-shrink: 0; background: none; border: 1px solid #fca5a5; color: #ef4444; cursor: pointer; border-radius: 7px; padding: 6px 10px; font-size: 15px; line-height: 1; transition: all 0.15s; }
+    .q-remove-btn:hover { background: #fee2e2; }
+    .add-q-job-btn { display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px; border-radius: 7px; font-size: 12.5px; font-weight: 600; cursor: pointer; border: 1.5px dashed var(--border); background: transparent; color: var(--muted); transition: all 0.15s; margin-top: 6px; }
+    .add-q-job-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .save-tpl-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+    .save-tpl-row input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent); flex-shrink: 0; }
+    .save-tpl-row label { font-size: 13px; font-weight: 500; color: var(--text); cursor: pointer; }
+    .save-tpl-name-input { flex: 1; min-width: 160px; padding: 7px 11px; border: 1.5px solid var(--border); border-radius: 7px; font-size: 13px; font-family: inherit; color: var(--text); outline: none; transition: border-color 0.15s; display: none; }
+    .save-tpl-name-input.show { display: block; }
+    .save-tpl-name-input:focus { border-color: var(--accent); }
+    /* Salary row */
+    .salary-row { display: flex; gap: 10px; align-items: center; }
+    .salary-sep { color: var(--muted); font-size: 13px; font-weight: 600; flex-shrink: 0; }
+    /* Job action bar */
+    .job-action-bar { display: flex; gap: 12px; align-items: center; margin-top: 20px; }
+    .btn-draft { padding: 10px 20px; border-radius: 9px; font-size: 13.5px; font-weight: 700; cursor: pointer; border: 2px solid var(--border); background: var(--surface); color: var(--text); transition: all 0.15s; font-family: inherit; }
+    .btn-draft:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-publish { padding: 10px 24px; border-radius: 9px; font-size: 13.5px; font-weight: 700; cursor: pointer; border: none; background: var(--accent); color: #fff; transition: all 0.15s; display: flex; align-items: center; gap: 7px; font-family: inherit; }
+    .btn-publish:hover:not(:disabled) { background: #4f46e5; transform: translateY(-1px); }
+    .btn-publish:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .job-success { background: linear-gradient(135deg, #059669 0%, #10b981 100%); border-radius: var(--radius); padding: 18px 22px; color: #fff; display: none; margin-top: 16px; }
+    .job-success.show { display: block; }
+    .job-success h3 { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+    .job-id-box { background: rgba(0,0,0,0.18); border-radius: 7px; padding: 8px 12px; font-size: 12px; font-family: monospace; margin-top: 10px; word-break: break-all; }
   </style>
 </head>
 <body>
@@ -334,6 +405,9 @@
       <span class="nav-badge" id="pipelineBadge">&#8212;</span>
     </div>
     <div class="nav-section-label" style="margin-top:8px;">Actions</div>
+    <div class="nav-item" data-panel="jobs" onclick="navigate(this)">
+      <span class="nav-icon">&#128188;</span> Post a Job
+    </div>
     <div class="nav-item" data-panel="create" onclick="navigate(this)">
       <span class="nav-icon">&#9993;</span> Create Interview
     </div>
@@ -486,6 +560,194 @@
       </div>
     </div>
 
+    <!-- PANEL: Post a Job -->
+    <div class="panel" id="panel-jobs">
+      <div class="job-form-layout">
+        <!-- Left column: form cards -->
+        <div>
+          <!-- Job Details -->
+          <div class="section-card">
+            <div class="section-card-hdr">
+              <span class="section-icon">&#128196;</span>
+              <h3>Job Details</h3>
+            </div>
+            <div class="section-card-body">
+              <div class="form-group">
+                <label class="form-label" for="jobTitle">Job Title *</label>
+                <input class="form-input" type="text" id="jobTitle" placeholder="e.g. Senior Software Engineer" autocomplete="off">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Description *</label>
+                <div class="rich-toolbar-wrap">
+                  <div class="rich-toolbar">
+                    <button type="button" class="rt-btn" onmousedown="event.preventDefault();rtCmd('bold')" title="Bold"><b>B</b></button>
+                    <button type="button" class="rt-btn" onmousedown="event.preventDefault();rtCmd('italic')" title="Italic"><i>I</i></button>
+                    <button type="button" class="rt-btn" onmousedown="event.preventDefault();rtCmd('underline')" title="Underline"><u>U</u></button>
+                    <button type="button" class="rt-btn" onmousedown="event.preventDefault();rtCmd('insertUnorderedList')" title="Bullet list">&#8226; List</button>
+                    <button type="button" class="rt-btn" onmousedown="event.preventDefault();rtCmd('insertOrderedList')" title="Numbered list">1. List</button>
+                    <button type="button" class="rt-btn" onmousedown="event.preventDefault();rtCmd('removeFormat')" title="Clear formatting">&#10006; Clear</button>
+                  </div>
+                  <div class="rich-editor empty" id="jobDescEditor" contenteditable="true" data-placeholder="Describe the role, responsibilities, and ideal candidate&#8230;"></div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Requirements <span class="form-hint">&#8212; type a skill and press Enter</span></label>
+                <div class="tag-input-wrap" id="reqTagWrap" onclick="document.getElementById('reqTagInput').focus()">
+                  <input type="text" class="tag-text-input" id="reqTagInput" placeholder="Add a skill&#8230;" autocomplete="off"
+                    onkeydown="handleTagKey(event,'reqTagWrap','reqTagInput')"
+                    onblur="commitTag('reqTagWrap','reqTagInput')">
+                </div>
+              </div>
+              <div class="form-row" style="margin-bottom:18px;">
+                <div>
+                  <label class="form-label" for="jobLocation">Location</label>
+                  <input class="form-input" type="text" id="jobLocation" placeholder="e.g. London, UK or Remote" autocomplete="off">
+                </div>
+                <div>
+                  <label class="form-label" for="jobEmploymentType">Employment Type</label>
+                  <select class="form-input" id="jobEmploymentType">
+                    <option value="full-time">Full-time</option>
+                    <option value="part-time">Part-time</option>
+                    <option value="contract">Contract</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Salary Range <span class="form-hint">&#8212; optional</span></label>
+                <div class="salary-row">
+                  <input class="form-input" type="number" id="jobSalaryMin" placeholder="Min" min="0" style="flex:1;">
+                  <span class="salary-sep">&#8212;</span>
+                  <input class="form-input" type="number" id="jobSalaryMax" placeholder="Max" min="0" style="flex:1;">
+                  <select class="form-input" id="jobSalaryCurrency" style="flex:0 0 90px;">
+                    <option value="GBP">GBP</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI Screening -->
+          <div class="section-card">
+            <div class="section-card-hdr">
+              <span class="section-icon">&#129504;</span>
+              <h3>AI Screening</h3>
+            </div>
+            <div class="section-card-body">
+              <div class="form-group threshold-wrap">
+                <div class="threshold-header">
+                  <span class="threshold-label">Score Threshold</span>
+                  <span class="threshold-val" id="scoreThresholdVal">65</span>
+                </div>
+                <input type="range" class="threshold-slider" id="scoreThresholdSlider" min="0" max="100" value="65"
+                  style="--val:65%" oninput="updateSlider(this,'scoreThresholdVal')">
+                <div class="threshold-hint">Candidates below this score won't receive an interview invite</div>
+              </div>
+
+              <div class="form-group" style="margin-top:22px;">
+                <label class="form-label">Interview Mode</label>
+                <div class="mode-opts">
+                  <div class="mode-opt">
+                    <input type="radio" name="interviewMode" id="modeAuto" value="auto" checked onchange="onJobModeChange()">
+                    <label for="modeAuto">
+                      <span class="mo-icon">&#129520;</span>
+                      <span class="mo-title">Auto</span>
+                      <span class="mo-desc">AI generates personalised questions per candidate</span>
+                    </label>
+                  </div>
+                  <div class="mode-opt">
+                    <input type="radio" name="interviewMode" id="modeTemplate" value="template" onchange="onJobModeChange()">
+                    <label for="modeTemplate">
+                      <span class="mo-icon">&#128196;</span>
+                      <span class="mo-title">Template</span>
+                      <span class="mo-desc">Pick from your saved question sets</span>
+                    </label>
+                  </div>
+                  <div class="mode-opt">
+                    <input type="radio" name="interviewMode" id="modeCustom" value="custom" onchange="onJobModeChange()">
+                    <label for="modeCustom">
+                      <span class="mo-icon">&#9999;</span>
+                      <span class="mo-title">Custom</span>
+                      <span class="mo-desc">Write specific questions for this role</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Template picker -->
+              <div id="templateSection" style="display:none;margin-top:14px;">
+                <div class="form-group" style="margin-bottom:0;">
+                  <label class="form-label" for="questionTemplateSelect">Question Template</label>
+                  <select class="form-input" id="questionTemplateSelect">
+                    <option value="">Loading templates&#8230;</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Custom question builder -->
+              <div id="customSection" style="display:none;margin-top:14px;">
+                <div class="form-group" style="margin-bottom:0;">
+                  <label class="form-label">Questions <span class="form-hint">&#8212; up to 10, greeting &amp; sign-off are added automatically</span></label>
+                  <div class="q-builder" id="jobQList"></div>
+                  <button type="button" class="add-q-job-btn" id="addJobQBtn" onclick="addJobQuestion()">&#43; Add question</button>
+                  <div class="save-tpl-row">
+                    <input type="checkbox" id="saveTplCheck" onchange="toggleSaveTplName()">
+                    <label for="saveTplCheck">Save as a new template</label>
+                    <input type="text" class="save-tpl-name-input" id="saveTplName" placeholder="Template name&#8230;">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Recommendation threshold -->
+              <div class="form-group threshold-wrap" style="margin-top:22px;margin-bottom:0;">
+                <div class="threshold-header">
+                  <span class="threshold-label">Recommendation Threshold</span>
+                  <span class="threshold-val" id="recThresholdVal">75</span>
+                </div>
+                <input type="range" class="threshold-slider" id="recThresholdSlider" min="0" max="100" value="75"
+                  style="--val:75%" oninput="updateSlider(this,'recThresholdVal')">
+                <div class="threshold-hint">Candidates above this combined score will be auto-recommended</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="inline-error" id="jobFormError"></div>
+          <div class="job-action-bar">
+            <button type="button" class="btn-draft" onclick="submitJob('draft')">&#128190; Save Draft</button>
+            <button type="button" class="btn-publish" id="publishJobBtn" onclick="submitJob('open')">&#128640; Publish Job</button>
+          </div>
+          <div class="job-success" id="jobSuccess">
+            <h3>&#9989; Job published!</h3>
+            <p style="font-size:13px;opacity:0.85;margin-top:4px;">Candidates can now apply using this Job ID.</p>
+            <div class="job-id-box" id="jobSuccessId"></div>
+          </div>
+        </div>
+
+        <!-- Right sidebar -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card">
+            <div class="card-header"><span class="card-title">How it works</span></div>
+            <div class="tips-card">
+              <div class="tip-item"><div class="tip-num">1</div><div class="tip-text"><strong>Post the role</strong> &#8212; fill in job details and configure AI screening.</div></div>
+              <div class="tip-item"><div class="tip-num">2</div><div class="tip-text"><strong>Candidates apply</strong> via the API with their CV &#8212; AI scores them instantly.</div></div>
+              <div class="tip-item"><div class="tip-num">3</div><div class="tip-text"><strong>Auto-invite</strong> &#8212; candidates above the score threshold receive an AI interview link.</div></div>
+              <div class="tip-item"><div class="tip-num">4</div><div class="tip-text"><strong>Top candidates</strong> are flagged when their combined score exceeds the recommendation threshold.</div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">My Jobs</span>
+              <button class="card-action" onclick="loadJobsList()">&#8635; Refresh</button>
+            </div>
+            <div id="savedJobsList" style="padding:8px 0;">
+              <div class="empty-state" style="padding:20px 0;"><p>No jobs posted yet</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- PANEL: Create Interview -->
     <div class="panel" id="panel-create">
       <div class="create-layout">
@@ -614,6 +876,7 @@
     candidates: { title: 'Candidates',       subtitle: 'All your interview sessions' },
     create:     { title: 'Create Interview', subtitle: 'Generate a new interview link' },
     pipeline:   { title: 'Pipeline',         subtitle: 'Applicant tracking board' },
+    jobs:       { title: 'Post a Job',        subtitle: 'Create a new job listing' },
   };
 
   function navigate(el) {
@@ -626,6 +889,7 @@
     if (panel === 'candidates') loadCandidates();
     if (panel === 'dashboard') loadDashboard();
     if (panel === 'pipeline') loadPipeline();
+    if (panel === 'jobs') loadJobPanel();
   }
 
   // Toast
@@ -1567,6 +1831,255 @@
     }
 
     document.getElementById('slidePanelBody').innerHTML = html || '<div class="sp-loading">No data available.</div>';
+  }
+
+  // ── Job Posting Panel ────────────────────────────────────────────────
+  var allJobs = [];
+  var jobTemplates = [];
+
+  function loadJobPanel() {
+    loadTemplatesForDropdown();
+    loadJobsList();
+    initRichEditorPlaceholder();
+  }
+
+  function loadJobsList() {
+    fetch(BACKEND_URL + '/jobs', { headers: authHeaders() })
+      .then(function(r) { if (!r.ok) throw new Error(); return r.json(); })
+      .then(function(data) { allJobs = data.jobs || []; renderJobsList(); })
+      .catch(function() {});
+  }
+
+  function renderJobsList() {
+    var el = document.getElementById('savedJobsList');
+    if (!allJobs.length) {
+      el.innerHTML = '<div class="empty-state" style="padding:20px 0;"><p>No jobs posted yet</p></div>';
+      return;
+    }
+    var html = '';
+    allJobs.slice(0, 8).forEach(function(j) {
+      var sCol = j.status === 'open' ? '#10b981' : j.status === 'draft' ? '#6b7280' : '#ef4444';
+      html += '<div class="recent-link-item">'
+        + '<div class="recent-link-icon">&#128196;</div>'
+        + '<div style="flex:1;min-width:0;">'
+        + '<div class="recent-link-name">' + esc(j.title || 'Untitled') + '</div>'
+        + '<div class="recent-link-time" style="display:flex;gap:6px;align-items:center;">'
+        + '<span style="color:' + sCol + ';font-weight:700;">' + esc(j.status || '') + '</span>'
+        + '<span>&#183;</span><span>' + esc(timeAgo(j.createdAt)) + '</span>'
+        + '</div></div></div>';
+    });
+    el.innerHTML = html;
+  }
+
+  function loadTemplatesForDropdown() {
+    fetch(BACKEND_URL + '/question-templates', { headers: authHeaders() })
+      .then(function(r) { if (!r.ok) throw new Error(); return r.json(); })
+      .then(function(data) {
+        jobTemplates = data.templates || [];
+        var sel = document.getElementById('questionTemplateSelect');
+        if (!jobTemplates.length) {
+          sel.innerHTML = '<option value="">No saved templates \u2014 use Custom mode to create one</option>';
+          return;
+        }
+        sel.innerHTML = '<option value="">\u2014 Select a template \u2014</option>';
+        jobTemplates.forEach(function(t) {
+          sel.innerHTML += '<option value="' + esc(t.templateId) + '">'
+            + esc(t.name || t.templateId) + ' (' + (t.questions ? t.questions.length : 0) + ' Qs)</option>';
+        });
+      })
+      .catch(function() {});
+  }
+
+  function updateSlider(input, valId) {
+    var val = parseInt(input.value, 10);
+    document.getElementById(valId).textContent = val;
+    input.style.setProperty('--val', val + '%');
+  }
+
+  function onJobModeChange() {
+    var mode = document.querySelector('input[name="interviewMode"]:checked').value;
+    document.getElementById('templateSection').style.display = mode === 'template' ? 'block' : 'none';
+    document.getElementById('customSection').style.display = mode === 'custom' ? 'block' : 'none';
+  }
+
+  function initRichEditorPlaceholder() {
+    var ed = document.getElementById('jobDescEditor');
+    if (!ed) return;
+    function checkEmpty() { ed.classList.toggle('empty', !ed.innerText.trim()); }
+    ed.addEventListener('input', checkEmpty);
+    ed.addEventListener('focus', checkEmpty);
+    ed.addEventListener('blur', checkEmpty);
+    checkEmpty();
+  }
+
+  function rtCmd(cmd) {
+    document.getElementById('jobDescEditor').focus();
+    document.execCommand(cmd, false, null);
+  }
+
+  // Tag input
+  function handleTagKey(evt, wrapId, inputId) {
+    if (evt.key === 'Enter' || evt.key === ',' || evt.key === 'Tab') {
+      evt.preventDefault();
+      commitTag(wrapId, inputId);
+    } else if (evt.key === 'Backspace' && document.getElementById(inputId).value === '') {
+      var tags = document.querySelectorAll('#' + wrapId + ' .tag');
+      if (tags.length) tags[tags.length - 1].remove();
+    }
+  }
+
+  function commitTag(wrapId, inputId) {
+    var input = document.getElementById(inputId);
+    var text = input.value.replace(/,/g, '').trim();
+    if (text) { addJobTag(wrapId, text, inputId); input.value = ''; }
+  }
+
+  function addJobTag(wrapId, text, inputId) {
+    var wrap = document.getElementById(wrapId);
+    var tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.innerHTML = esc(text) + '<button type="button" class="tag-remove" onclick="this.parentNode.remove()" title="Remove">&times;</button>';
+    var inp = document.getElementById(inputId);
+    wrap.insertBefore(tag, inp);
+  }
+
+  function getTagValues(wrapId) {
+    return Array.from(document.querySelectorAll('#' + wrapId + ' .tag')).map(function(t) {
+      return t.firstChild ? t.firstChild.textContent.trim() : '';
+    }).filter(Boolean);
+  }
+
+  // Custom question builder
+  function addJobQuestion(text) {
+    var list = document.getElementById('jobQList');
+    var items = list.querySelectorAll('.q-item');
+    if (items.length >= 10) { showToast('Maximum 10 questions', 'error'); return; }
+    var idx = items.length + 1;
+    var div = document.createElement('div');
+    div.className = 'q-item';
+    div.innerHTML = '<span class="q-item-num">' + idx + '</span>'
+      + '<input type="text" placeholder="Question ' + idx + '\u2026" value="' + esc(text || '') + '">'
+      + '<button type="button" class="q-remove-btn" onclick="removeJobQuestion(this)" title="Remove">&times;</button>';
+    list.appendChild(div);
+    div.querySelector('input').focus();
+    if (list.querySelectorAll('.q-item').length >= 10) {
+      document.getElementById('addJobQBtn').style.display = 'none';
+    }
+  }
+
+  function removeJobQuestion(btn) {
+    btn.parentNode.remove();
+    document.getElementById('addJobQBtn').style.display = '';
+    document.querySelectorAll('#jobQList .q-item').forEach(function(item, i) {
+      item.querySelector('.q-item-num').textContent = i + 1;
+      item.querySelector('input').placeholder = 'Question ' + (i + 1) + '\u2026';
+    });
+  }
+
+  function toggleSaveTplName() {
+    var checked = document.getElementById('saveTplCheck').checked;
+    var inp = document.getElementById('saveTplName');
+    inp.classList.toggle('show', checked);
+    if (checked) inp.focus();
+  }
+
+  function getJobQuestions() {
+    return Array.from(document.querySelectorAll('#jobQList .q-item input'))
+      .map(function(inp) { return inp.value.trim(); }).filter(Boolean);
+  }
+
+  function collectJobFormData() {
+    var mode = document.querySelector('input[name="interviewMode"]:checked').value;
+    return {
+      title: document.getElementById('jobTitle').value.trim(),
+      description: document.getElementById('jobDescEditor').innerHTML.trim(),
+      descriptionText: document.getElementById('jobDescEditor').innerText.trim(),
+      requirements: getTagValues('reqTagWrap'),
+      location: document.getElementById('jobLocation').value.trim() || null,
+      employmentType: document.getElementById('jobEmploymentType').value,
+      salaryMin: parseInt(document.getElementById('jobSalaryMin').value, 10) || null,
+      salaryMax: parseInt(document.getElementById('jobSalaryMax').value, 10) || null,
+      salaryCurrency: document.getElementById('jobSalaryCurrency').value,
+      scoreThreshold: parseInt(document.getElementById('scoreThresholdSlider').value, 10),
+      recommendationThreshold: parseInt(document.getElementById('recThresholdSlider').value, 10),
+      interviewMode: mode,
+      questionTemplateId: mode === 'template' ? (document.getElementById('questionTemplateSelect').value || null) : null,
+      customQuestions: mode === 'custom' ? getJobQuestions() : null,
+    };
+  }
+
+  function submitJob(status) {
+    var data = collectJobFormData();
+    var errEl = document.getElementById('jobFormError');
+    errEl.textContent = '';
+    errEl.style.display = 'none';
+
+    if (!data.title) {
+      errEl.textContent = 'Job title is required.';
+      errEl.style.display = 'block';
+      document.getElementById('jobTitle').focus();
+      return;
+    }
+    if (!data.descriptionText) {
+      errEl.textContent = 'Job description is required.';
+      errEl.style.display = 'block';
+      document.getElementById('jobDescEditor').focus();
+      return;
+    }
+    if (data.interviewMode === 'template' && !data.questionTemplateId) {
+      errEl.textContent = 'Please select a question template.';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (data.interviewMode === 'custom' && (!data.customQuestions || !data.customQuestions.length)) {
+      errEl.textContent = 'Please add at least one question, or switch to Auto mode.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    var btn = document.getElementById('publishJobBtn');
+    btn.disabled = true;
+    document.getElementById('jobSuccess').classList.remove('show');
+
+    var saveTplPromise = Promise.resolve(null);
+    if (data.interviewMode === 'custom' && document.getElementById('saveTplCheck').checked) {
+      var tplName = document.getElementById('saveTplName').value.trim() || data.title;
+      saveTplPromise = fetch(BACKEND_URL + '/question-templates', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+        body: JSON.stringify({ name: tplName, questions: data.customQuestions }),
+      }).then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(d) {
+          if (d && d.templateId) { showToast('Template saved'); return d.templateId; }
+          return null;
+        }).catch(function() { return null; });
+    }
+
+    saveTplPromise.then(function(templateId) {
+      if (templateId) data.questionTemplateId = templateId;
+      return fetch(BACKEND_URL + '/jobs', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+        body: JSON.stringify(Object.assign({}, data, { status: status })),
+      });
+    }).then(function(r) {
+      return r.json().then(function(body) {
+        if (!r.ok) throw new Error(body.error || 'Failed to save job');
+        return body;
+      });
+    }).then(function(body) {
+      var successEl = document.getElementById('jobSuccess');
+      successEl.querySelector('h3').textContent = status === 'open' ? '\u2705 Job published!' : '\ud83d\udcbe Draft saved!';
+      document.getElementById('jobSuccessId').textContent = 'Job ID: ' + body.jobId;
+      successEl.classList.add('show');
+      showToast(status === 'open' ? 'Job published!' : 'Draft saved!');
+      loadJobsList();
+    }).catch(function(e) {
+      errEl.textContent = e.message || 'Failed to save job. Please try again.';
+      errEl.style.display = 'block';
+    }).finally(function() {
+      btn.disabled = false;
+    });
   }
 
   // Boot
