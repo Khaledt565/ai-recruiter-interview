@@ -13,7 +13,7 @@ import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand, ScanCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { processTranscript, generateCandidateSummary } from './interview-engine.js';
-import { suggestQuestionsFromCV, scoreProfileWithAI } from './bedrock-client.js';
+import { suggestQuestionsFromCV, scoreProfileWithAI, generateInterviewReport } from './bedrock-client.js';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
@@ -30,6 +30,7 @@ const JOBS_TABLE              = process.env.JOBS_TABLE               || 'Jobs-de
 const APPLICATIONS_TABLE      = process.env.APPLICATIONS_TABLE       || 'Applications-dev';
 const AI_SESSIONS_TABLE       = process.env.AI_SESSIONS_TABLE        || 'AIInterviewSessions-dev';
 const QUESTION_TEMPLATES_TABLE = process.env.QUESTION_TEMPLATES_TABLE || 'QuestionTemplates-dev';
+const INTERVIEW_REPORTS_TABLE  = process.env.INTERVIEW_REPORTS_TABLE  || 'InterviewReports-dev';
 const COGNITO_USER_POOL_ID    = process.env.COGNITO_USER_POOL_ID     || 'eu-central-1_JbO8lhpi2';
 
 const polly = new PollyClient({ region: REGION });
@@ -92,9 +93,9 @@ async function saveInterviewSnapshot(meetingId, attendeeId, status) {
     const state = stateRes.Item || {};
     const meta = metaRes.Item || {};
 
-    // Generate AI summary only for completed interviews with conversation history
+    // Generate AI summary for non-pipeline interviews (pipeline interviews use finalizeInterviewPipeline)
     let aiSummary = null;
-    if (status === 'completed' && state.history && state.history.length > 0) {
+    if (status === 'completed' && !meta.applicationId && state.history && state.history.length > 0) {
       try {
         aiSummary = await generateCandidateSummary(
           state.history,
@@ -157,9 +158,15 @@ async function saveInterviewSnapshot(meetingId, attendeeId, status) {
       ExpressionAttributeValues: exprValues,
     }));
 
-    // Notify recruiter by email when interview completes
-    if (status === 'completed' && meta.recruiterEmail && SES_FROM_EMAIL) {
-      await sendRecruiterEmail(meta.recruiterEmail, meta.candidateName, aiSummary, meetingId);
+    // Notify recruiter / finalize pipeline when interview completes
+    if (status === 'completed') {
+      if (meta.applicationId) {
+        // Pipeline interview: score answers, write report, update application, notify recruiter
+        finalizeInterviewPipeline(meetingId, meta, state.history || [], state.jobDescription || meta.jobDescription || null)
+          .catch(err => console.error('❌ Pipeline finalization failed:', err.message));
+      } else if (meta.recruiterEmail && SES_FROM_EMAIL) {
+        await sendRecruiterEmail(meta.recruiterEmail, meta.candidateName, aiSummary, meetingId);
+      }
     }
 
     console.log(`âœ… Interview snapshot saved (${meetingId}, status: ${status}, turns: ${snapshot.conversation.length})`);
@@ -285,6 +292,109 @@ async function sendRecruiterLowScoreEmail(recruiterEmail, candidateName, jobTitl
   }
 }
 
+// ── Interview complete recruiter notification ─────────────────────────────────
+async function sendInterviewCompleteNotification(recruiterEmail, candidateName, jobTitle, combinedScore, interviewId) {
+  if (!SES_FROM_EMAIL || !recruiterEmail) return;
+  try {
+    await ses.send(new SendEmailCommand({
+      Source: SES_FROM_EMAIL,
+      Destination: { ToAddresses: [recruiterEmail] },
+      Message: {
+        Subject: { Data: `Interview complete — ${candidateName} scored ${combinedScore}% for ${jobTitle}` },
+        Body: {
+          Text: {
+            Data: [
+              `Interview complete for: ${jobTitle}`,
+              ``,
+              `Candidate:     ${candidateName}`,
+              `Combined Score: ${combinedScore}/100`,
+              ``,
+              `View the full report and scorecard in your recruiter dashboard.`,
+              `Interview ID: ${interviewId}`,
+            ].join('\n'),
+          },
+        },
+      },
+    }));
+    console.log(`✅ Interview complete notification sent to ${recruiterEmail}`);
+  } catch (err) {
+    console.error('❌ Failed to send interview complete notification (non-fatal):', err.message);
+  }
+}
+
+// ── Post-interview pipeline: score, report, application update ────────────────
+async function finalizeInterviewPipeline(interviewId, meta, history, jobDescription) {
+  const tag = `[Pipeline:${interviewId}]`;
+  try {
+    // 1. Generate per-answer scores and overall report via AI
+    const report = await generateInterviewReport(
+      history,
+      meta.candidateName || 'Unknown',
+      jobDescription,
+    );
+
+    // 2. Load Application record for aiProfileScore
+    const appKey = { pk: `JOB#${meta.jobId}`, sk: `APPLICATION#${meta.applicationId}` };
+    const appRes = await ddb.send(new GetCommand({ TableName: APPLICATIONS_TABLE, Key: appKey }));
+    const app = appRes.Item || {};
+    const aiProfileScore = typeof app.aiProfileScore === 'number' ? app.aiProfileScore : 0;
+
+    // 3. Calculate combined score and auto-recommendation
+    const aiInterviewScore = report.aiInterviewScore;
+    const combinedScore = Math.round((aiProfileScore * 0.4) + (aiInterviewScore * 0.6));
+    const recommendationThreshold = typeof meta.recommendationThreshold === 'number' ? meta.recommendationThreshold : 75;
+    const autoRecommended = combinedScore >= recommendationThreshold;
+    const jobTitle = meta.jobTitle || 'the role';
+
+    console.log(`${tag} combinedScore: ${combinedScore} (profile ${aiProfileScore}×0.4 + interview ${aiInterviewScore}×0.6), autoRecommended: ${autoRecommended}`);
+
+    // 4. Write InterviewReport record
+    const now = new Date().toISOString();
+    await ddb.send(new PutCommand({
+      TableName: INTERVIEW_REPORTS_TABLE,
+      Item: {
+        pk: `SESSION#${interviewId}`,
+        sk: 'REPORT',
+        sessionId: interviewId,
+        applicationId: meta.applicationId,
+        overallScore: combinedScore,
+        aiInterviewScore,
+        aiProfileScore,
+        answerScores: report.answerScores,
+        summary: report.summary,
+        strengths: report.strengths,
+        concerns: report.concerns,
+        autoRecommended,
+        generatedAt: now,
+      },
+    }));
+
+    // 5. Update Application record: scores, recommended flag, status
+    await ddb.send(new UpdateCommand({
+      TableName: APPLICATIONS_TABLE,
+      Key: appKey,
+      UpdateExpression: 'SET aiInterviewScore = :iScore, combinedScore = :cScore, recommended = :rec, #st = :st, updatedAt = :now',
+      ExpressionAttributeNames: { '#st': 'status' },
+      ExpressionAttributeValues: {
+        ':iScore': aiInterviewScore,
+        ':cScore': combinedScore,
+        ':rec': autoRecommended,
+        ':st': autoRecommended ? 'recommended' : 'ai_interview_complete',
+        ':now': now,
+      },
+    }));
+
+    // 6. Send recruiter notification
+    const recruiterEmail = meta.recruiterEmail || app.recruiterId || '';
+    await sendInterviewCompleteNotification(recruiterEmail, meta.candidateName, jobTitle, combinedScore, interviewId);
+
+    console.log(`✅ ${tag} Pipeline finalized — status: ${autoRecommended ? 'recommended' : 'ai_interview_complete'}`);
+  } catch (err) {
+    console.error(`❌ ${tag} Pipeline finalization failed:`, err.message);
+    throw err;
+  }
+}
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -323,11 +433,12 @@ app.post('/applications', async (req, res) => {
     if (!job) return res.status(404).json({ error: 'Job not found' });
     if (job.status !== 'open') return res.status(400).json({ error: 'Job is not accepting applications' });
 
-    const scoreThreshold = typeof job.scoreThreshold === 'number' ? job.scoreThreshold : 50;
-    const interviewMode  = job.interviewMode || 'auto';   // auto | template | custom
-    const jobDescription = job.description || '';
-    const recruiterEmail = job.recruiterId || '';         // stored as recruiter email in recruiterId field
-    const jobTitle       = job.title || 'this role';
+    const scoreThreshold           = typeof job.scoreThreshold === 'number' ? job.scoreThreshold : 50;
+    const interviewMode             = job.interviewMode || 'auto';   // auto | template | custom
+    const jobDescription            = job.description || '';
+    const recruiterEmail            = job.recruiterId || '';         // stored as recruiter email in recruiterId field
+    const jobTitle                  = job.title || 'this role';
+    const recommendationThreshold   = typeof job.recommendationThreshold === 'number' ? job.recommendationThreshold : 75;
 
     // â”€â”€ 3. AI profile scoring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const { score: aiProfileScore, reasoning } = await scoreProfileWithAI(jobDescription, cvText);
@@ -433,6 +544,9 @@ app.post('/applications', async (req, res) => {
         jobDescription: jobDescription || null,
         customQuestions: customQuestions || null,
         applicationId,
+        jobId,
+        jobTitle,
+        recommendationThreshold,
         status: 'created',
         createdAt: now,
         expiresAt,

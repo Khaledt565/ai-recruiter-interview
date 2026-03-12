@@ -140,6 +140,52 @@ No other text.`,
   }
 }
 
+// Score each answer and generate a comprehensive post-interview report
+// Returns { answerScores: number[], aiInterviewScore: number, summary: string, strengths: string[], concerns: string[] }
+export async function generateInterviewReport(history, candidateName, jobDescription) {
+  if (!history || history.length === 0) {
+    return { answerScores: [], aiInterviewScore: 0, summary: 'No interview data recorded.', strengths: [], concerns: [] };
+  }
+  console.log(`[Bedrock] generateInterviewReport — candidate: "${candidateName}", ${history.length} turn(s), hasJD: ${!!jobDescription}`);
+  const transcript = history.map((h, i) => `Q${i + 1}: ${h.q}\nAnswer: ${h.a}`).join('\n\n');
+  const jobContext = jobDescription ? `Job Description:\n${jobDescription.slice(0, 2000)}\n\n` : '';
+  const body = {
+    anthropic_version: 'bedrock-2023-05-31',
+    max_tokens: 1200,
+    temperature: 0.1,
+    messages: [{
+      role: 'user',
+      content: `You are a recruiter evaluating a completed AI voice interview. Assess the candidate objectively.\n\n${jobContext}Candidate: ${candidateName}\n\nInterview Transcript:\n${transcript}\n\nReturn ONLY valid JSON with these exact keys:\n- answerScores: array of integers 0-100, one per question-answer pair in transcript order (0 = no/irrelevant answer, 100 = exceptional)\n- summary: string (2-3 sentences assessing overall performance)\n- strengths: array of 2-4 strings (specific things the candidate demonstrated well)\n- concerns: array of 0-3 strings (gaps, red flags, or areas of concern — use empty array if none)\n\nNo other text.`,
+    }],
+  };
+  try {
+    const resp = await bedrock.send(new InvokeModelCommand({
+      modelId: BEDROCK_MODEL_ID,
+      contentType: 'application/json',
+      accept: 'application/json',
+      body: JSON.stringify(body),
+    }));
+    const text = extractJsonText(parseBedrockResponse(resp) || '{}');
+    const result = JSON.parse(text);
+    const answerScores = (Array.isArray(result.answerScores) ? result.answerScores : [])
+      .map(s => Math.max(0, Math.min(100, Math.round(Number(s)))));
+    const aiInterviewScore = answerScores.length > 0
+      ? Math.round(answerScores.reduce((a, b) => a + b, 0) / answerScores.length)
+      : 0;
+    console.log(`[Bedrock] generateInterviewReport — aiInterviewScore: ${aiInterviewScore}/100, answers scored: ${answerScores.length}`);
+    return {
+      answerScores,
+      aiInterviewScore,
+      summary: result.summary || '',
+      strengths: Array.isArray(result.strengths) ? result.strengths : [],
+      concerns: Array.isArray(result.concerns) ? result.concerns : [],
+    };
+  } catch (err) {
+    console.error('[Bedrock] generateInterviewReport — failed:', err.message);
+    return { answerScores: [], aiInterviewScore: 0, summary: 'Report generation failed.', strengths: [], concerns: [] };
+  }
+}
+
 // Generate an AI assessment after the interview completes
 export async function generateCandidateSummary(history, candidateName, jobDescription) {
   if (!history || history.length === 0) return null;
