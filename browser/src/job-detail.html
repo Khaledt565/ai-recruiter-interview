@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Job Detail — TalentAI</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --accent: #6366f1; --accent-light: #818cf8; --accent-glow: rgba(99,102,241,0.15);
+      --bg: #f5f6fa; --surface: #ffffff; --border: #e5e7eb;
+      --text: #111827; --muted: #6b7280; --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+    .navbar { background: #0f0f1a; padding: 0 32px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .nav-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-brand-icon { width: 34px; height: 34px; background: linear-gradient(135deg, var(--accent), #a855f7); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+    .nav-brand-name { font-size: 15px; font-weight: 700; color: #fff; }
+    .nav-actions { display: flex; align-items: center; gap: 10px; }
+    .nav-link { color: rgba(255,255,255,0.65); text-decoration: none; font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 7px; transition: color 0.15s; }
+    .nav-link:hover { color: #fff; }
+    .nav-btn { display: inline-flex; align-items: center; gap: 5px; padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; text-decoration: none; border: none; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #4f46e5; }
+    .btn-outline-white { background: transparent; border: 1.5px solid rgba(255,255,255,0.25); color: rgba(255,255,255,0.85); }
+    .btn-outline-white:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
+
+    .breadcrumb { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 32px; font-size: 13px; color: var(--muted); }
+    .breadcrumb a { color: var(--accent); text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+
+    .main { max-width: 1040px; margin: 32px auto; padding: 0 24px; display: grid; grid-template-columns: 1fr 300px; gap: 24px; align-items: start; }
+
+    /* ── Job detail card ── */
+    .detail-card { background: var(--surface); border-radius: var(--radius); border: 1.5px solid var(--border); box-shadow: var(--shadow); overflow: hidden; }
+    .detail-hero { padding: 28px 28px 24px; border-bottom: 1px solid var(--border); }
+    .detail-hero-top { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+    .detail-logo { width: 56px; height: 56px; border-radius: 12px; background: linear-gradient(135deg, var(--accent-glow), rgba(168,85,247,0.15)); display: flex; align-items: center; justify-content: center; font-size: 24px; border: 1.5px solid var(--border); flex-shrink: 0; }
+    .detail-title-wrap h1 { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+    .detail-meta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .meta-item { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted); }
+    .meta-item svg { color: var(--muted); }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .badge-emp { background: #ede9fe; color: #5b21b6; }
+    .badge-new { background: #dcfce7; color: #166534; }
+    .salary-display { font-size: 18px; font-weight: 800; color: #059669; }
+
+    .section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 10px; }
+    .detail-body { padding: 24px 28px; }
+    .detail-section { margin-bottom: 28px; }
+    .description-html { font-size: 14px; line-height: 1.75; color: var(--text); }
+    .description-html h1, .description-html h2, .description-html h3 { margin: 16px 0 8px; }
+    .description-html ul, .description-html ol { padding-left: 20px; margin: 8px 0; }
+    .description-html li { margin-bottom: 4px; }
+    .description-html p { margin-bottom: 10px; }
+    .req-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .req-tag { padding: 5px 12px; border-radius: 20px; font-size: 12.5px; font-weight: 500; background: #f3f4f6; color: #374151; border: 1.5px solid var(--border); }
+
+    /* ── Sidebar apply card ── */
+    .apply-card { background: var(--surface); border-radius: var(--radius); border: 1.5px solid var(--border); box-shadow: var(--shadow); padding: 24px; position: sticky; top: 80px; }
+    .apply-card h2 { font-size: 16.5px; font-weight: 800; margin-bottom: 6px; }
+    .apply-card p { font-size: 13px; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
+    .apply-btn { display: block; width: 100%; padding: 13px; background: var(--accent); color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; text-align: center; transition: background 0.15s; text-decoration: none; }
+    .apply-btn:hover { background: #4f46e5; }
+    .apply-divider { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+    .apply-fact { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; margin-bottom: 10px; }
+    .apply-fact-label { color: var(--muted); }
+    .apply-fact-val { font-weight: 600; color: var(--text); }
+
+    /* ── Loading / error ── */
+    .loading-state { padding: 60px 28px; text-align: center; color: var(--muted); }
+    .error-state { padding: 60px 28px; text-align: center; }
+    .error-state h2 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+
+    .toast-wrap { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+    .toast { padding: 12px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 500; box-shadow: 0 4px 20px rgba(0,0,0,0.15); animation: slideUp 0.25s ease; max-width: 320px; }
+    @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .toast-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+    @media (max-width: 720px) {
+      .main { grid-template-columns: 1fr; }
+      .apply-card { position: static; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="jobs.html" class="nav-brand">
+    <div class="nav-brand-icon">✦</div>
+    <span class="nav-brand-name">TalentAI</span>
+  </a>
+  <div class="nav-actions">
+    <a href="seeker-login.html" class="nav-link" id="navSignIn">Sign in</a>
+    <a href="seeker-applications.html" class="nav-link" id="navMyApps" style="display:none">My Applications</a>
+    <a href="seeker-profile.html" class="nav-btn btn-outline-white" id="navProfile" style="display:none">My Profile</a>
+    <button class="nav-btn btn-outline-white" id="navSignOut" style="display:none" onclick="seekerSignOut()">Sign out</button>
+    <a href="recruiter-login.html" class="nav-btn btn-primary">Post a Job</a>
+  </div>
+</nav>
+
+<div class="breadcrumb">
+  <a href="jobs.html">← Back to jobs</a>
+</div>
+
+<div class="main" id="mainContent">
+  <div class="detail-card">
+    <div class="loading-state" id="loadingState">Loading job details…</div>
+    <div id="jobContent" style="display:none">
+      <div class="detail-hero">
+        <div class="detail-hero-top">
+          <div class="detail-logo">🏢</div>
+          <div class="detail-title-wrap">
+            <h1 id="jobTitle">—</h1>
+            <div class="detail-meta-row" id="jobMeta"></div>
+          </div>
+        </div>
+        <div id="salaryDisplay"></div>
+      </div>
+      <div class="detail-body">
+        <div class="detail-section" id="requirementsSection" style="display:none">
+          <p class="section-title">Requirements</p>
+          <div class="req-tags" id="requirementsTags"></div>
+        </div>
+        <div class="detail-section">
+          <p class="section-title">About this role</p>
+          <div class="description-html" id="jobDescription"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="apply-card" id="applyCard" style="display:none">
+    <h2>Ready to apply?</h2>
+    <p>Submit your profile and CV. Our AI will match you with the role and get back to you quickly.</p>
+    <a href="#" class="apply-btn" id="applyBtn" onclick="handleApply(event)">Apply Now</a>
+    <hr class="apply-divider">
+    <div class="apply-fact"><span class="apply-fact-label">Employment type</span><span class="apply-fact-val" id="factEmp">—</span></div>
+    <div class="apply-fact"><span class="apply-fact-label">Location</span><span class="apply-fact-val" id="factLoc">—</span></div>
+    <div class="apply-fact"><span class="apply-fact-label">Interview</span><span class="apply-fact-val" id="factMode">AI-assisted</span></div>
+    <div class="apply-fact"><span class="apply-fact-label">Posted</span><span class="apply-fact-val" id="factPosted">—</span></div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+  var job = null;
+  var jobId = new URLSearchParams(window.location.search).get('id');
+
+  var backendHost = ['localhost',''].includes(window.location.hostname)
+    ? 'localhost:8080'
+    : 'l05uyc9rza.execute-api.eu-central-1.amazonaws.com/prod';
+  var backendProtocol = ['localhost',''].includes(window.location.hostname) ? 'http' : 'https';
+  var BACKEND_URL = backendProtocol + '://' + backendHost;
+
+  (function initAuth() {
+    var token = localStorage.getItem('seeker_token');
+    if (token) {
+      document.getElementById('navSignIn').style.display = 'none';
+      document.getElementById('navMyApps').style.display = '';
+      document.getElementById('navProfile').style.display = '';
+      document.getElementById('navSignOut').style.display = '';
+    }
+  })();
+
+  function seekerSignOut() {
+    ['seeker_token','seeker_id','seeker_email','seeker_name'].forEach(function(k) { localStorage.removeItem(k); });
+    window.location.reload();
+  }
+
+  function esc(s) { return String(s || '').replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function fmtDate(d) { return new Date(d).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' }); }
+  function fmtSalary(r) {
+    if (!r) return null;
+    var sym = r.currency === 'USD' ? '$' : r.currency === 'EUR' ? '€' : '£';
+    if (r.min && r.max) return sym + (r.min/1000|0) + 'k – ' + sym + (r.max/1000|0) + 'k per year';
+    if (r.max) return 'up to ' + sym + (r.max/1000|0) + 'k per year';
+    if (r.min) return 'from ' + sym + (r.min/1000|0) + 'k per year';
+    return null;
+  }
+  function empLabel(t) {
+    return t === 'full-time' ? 'Full-time' : t === 'part-time' ? 'Part-time' : t === 'contract' ? 'Contract' : t || '';
+  }
+  function modeLabel(m) {
+    return m === 'template' ? 'Template questions' : m === 'custom' ? 'Custom questions' : 'AI-generated';
+  }
+
+  function handleApply(e) {
+    e.preventDefault();
+    if (!job) return;
+    var token = localStorage.getItem('seeker_token');
+    if (!token) {
+      window.location.href = 'seeker-login.html?redirect=' + encodeURIComponent('seeker-apply.html?jobId=' + job.jobId);
+    } else {
+      window.location.href = 'seeker-apply.html?jobId=' + esc(job.jobId);
+    }
+  }
+
+  function renderJob(j) {
+    job = j;
+    document.title = j.title + ' — TalentAI';
+    document.getElementById('jobTitle').textContent = j.title;
+
+    var meta = document.getElementById('jobMeta');
+    var metaHtml = '';
+    if (j.location) metaHtml += '<span class="meta-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>' + esc(j.location) + '</span>';
+    if (j.employmentType) metaHtml += '<span class="meta-item"><span class="badge badge-emp">' + esc(empLabel(j.employmentType)) + '</span></span>';
+    meta.innerHTML = metaHtml;
+
+    var salary = fmtSalary(j.salaryRange);
+    if (salary) document.getElementById('salaryDisplay').innerHTML = '<p class="salary-display">' + esc(salary) + '</p>';
+
+    if (j.requirements && j.requirements.length) {
+      document.getElementById('requirementsSection').style.display = '';
+      document.getElementById('requirementsTags').innerHTML = j.requirements.map(function(r) {
+        return '<span class="req-tag">' + esc(r) + '</span>';
+      }).join('');
+    }
+
+    // Render description — treat as HTML (recruiter used rich text editor)
+    document.getElementById('jobDescription').innerHTML = j.description || '<p>No description provided.</p>';
+
+    // Sidebar facts
+    document.getElementById('factEmp').textContent = empLabel(j.employmentType) || '—';
+    document.getElementById('factLoc').textContent = j.location || 'Not specified';
+    document.getElementById('factMode').textContent = modeLabel(j.interviewMode);
+    document.getElementById('factPosted').textContent = j.createdAt ? fmtDate(j.createdAt) : '—';
+
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('jobContent').style.display = '';
+    document.getElementById('applyCard').style.display = '';
+  }
+
+  function showError(msg) {
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('jobContent').innerHTML = '<div class="error-state"><h2>⚠️ ' + esc(msg) + '</h2><p><a href="jobs.html">Back to job board</a></p></div>';
+    document.getElementById('jobContent').style.display = '';
+  }
+
+  if (!jobId) {
+    showError('No job specified');
+  } else {
+    fetch(BACKEND_URL + '/public/jobs/' + encodeURIComponent(jobId))
+      .then(function(r) {
+        if (!r.ok) throw new Error(r.status === 404 ? 'Job not found' : 'Failed to load job');
+        return r.json();
+      })
+      .then(renderJob)
+      .catch(function(e) { showError(e.message || 'Failed to load job'); });
+  }
+</script>
+</body>
+</html>

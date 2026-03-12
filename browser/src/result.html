@@ -243,10 +243,10 @@
 
   <script>
     (function() {
-      var backendHost = window.location.hostname === 'localhost'
+      var backendHost = ['localhost',''].includes(window.location.hostname)
         ? 'localhost:8080'
         : 'l05uyc9rza.execute-api.eu-central-1.amazonaws.com/prod';
-      var backendProtocol = window.location.hostname === 'localhost' ? 'http' : 'https';
+      var backendProtocol = ['localhost',''].includes(window.location.hostname) ? 'http' : 'https';
       var BACKEND_URL = backendProtocol + '://' + backendHost;
 
       var params = new URLSearchParams(window.location.search);

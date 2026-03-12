@@ -1,0 +1,462 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "AI Recruiter - Extended DynamoDB Tables (Jobs, Applications, Messages, Notifications, etc.)"
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: "dev"
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+Resources:
+
+  # ===================================
+  # Jobs
+  # pk = RECRUITER#<recruiterId>
+  # sk = JOB#<jobId>
+  # GSI: JobsByStatus — query all open/paused/closed jobs globally
+  # ===================================
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "Jobs-${EnvironmentName}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk               # RECRUITER#<recruiterId>
+          AttributeType: S
+        - AttributeName: sk               # JOB#<jobId>
+          AttributeType: S
+        - AttributeName: status           # open | paused | closed
+          AttributeType: S
+        - AttributeName: jobId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        # Query all jobs by status (e.g. all open jobs across all recruiters)
+        - IndexName: JobsByStatus
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: jobId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # Query all jobs for a specific recruiter by jobId directly
+        - IndexName: JobsByJobId
+          KeySchema:
+            - AttributeName: jobId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+  # Fields stored on item (not keys — DynamoDB is schemaless for non-key attrs):
+  #   jobId, recruiterId, title, description, requirements (StringSet),
+  #   location, salaryRange (map: min/max/currency), status (open|paused|closed),
+  #   scoreThreshold (Number 0-100), interviewMode (auto|template|custom),
+  #   questionTemplateId (optional String), createdAt, updatedAt
+
+  # ===================================
+  # Applications
+  # pk = JOB#<jobId>
+  # sk = APPLICATION#<applicationId>
+  # GSIs: by seekerId, by recruiterId, by status
+  # ===================================
+  ApplicationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "Applications-${EnvironmentName}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk               # JOB#<jobId>
+          AttributeType: S
+        - AttributeName: sk               # APPLICATION#<applicationId>
+          AttributeType: S
+        - AttributeName: seekerId
+          AttributeType: S
+        - AttributeName: recruiterId
+          AttributeType: S
+        - AttributeName: applicationId
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        # All applications submitted by a seeker
+        - IndexName: ApplicationsBySeeker
+          KeySchema:
+            - AttributeName: seekerId
+              KeyType: HASH
+            - AttributeName: applicationId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # All applications visible to a recruiter (across their jobs)
+        - IndexName: ApplicationsByRecruiter
+          KeySchema:
+            - AttributeName: recruiterId
+              KeyType: HASH
+            - AttributeName: applicationId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # Filter applications by pipeline status
+        - IndexName: ApplicationsByStatus
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: applicationId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        # Direct lookup by applicationId
+        - IndexName: ApplicationById
+          KeySchema:
+            - AttributeName: applicationId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+  # Fields stored on item:
+  #   applicationId, jobId, seekerId, recruiterId, coverLetter, cvUrl,
+  #   aiProfileScore (N), aiInterviewScore (N), combinedScore (N),
+  #   recommended (BOOL),
+  #   status: applied | interview_invited | ai_interview_in_progress |
+  #           ai_interview_complete | recommended | shortlisted |
+  #           human_interview | offered | hired | rejected | withdrawn
+  #   appliedAt (ISO string), updatedAt (ISO string)
+
+  # ===================================
+  # InterviewSessions (AI interview per application)
+  # pk = APPLICATION#<applicationId>
+  # sk = SESSION#<sessionId>
+  # GSI: by sessionId for direct lookup from interview flow
+  # ===================================
+  AIInterviewSessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "AIInterviewSessions-${EnvironmentName}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk               # APPLICATION#<applicationId>
+          AttributeType: S
+        - AttributeName: sk               # SESSION#<sessionId>
+          AttributeType: S
+        - AttributeName: sessionId
+          AttributeType: S
+        - AttributeName: inviteToken
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        # Direct lookup by sessionId (used in interview flow)
+        - IndexName: SessionById
+          KeySchema:
+            - AttributeName: sessionId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        # Validate invite token on candidate link click
+        - IndexName: SessionByToken
+          KeySchema:
+            - AttributeName: inviteToken
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+  # Fields stored on item:
+  #   sessionId, applicationId, inviteToken, mode (auto|template|custom),
+  #   state: pending | in_progress | completed | expired
+  #   scheduledAt, startedAt, completedAt, expiresAt (all ISO strings)
+
+  # ===================================
+  # InterviewQuestions
+  # pk = SESSION#<sessionId>
+  # sk = Q#<orderIndex> (zero-padded, e.g. Q#001)
+  # No GSI needed — always queried by sessionId
+  # ===================================
+  InterviewQuestionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "InterviewQuestions-${EnvironmentName}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk               # SESSION#<sessionId>
+          AttributeType: S
+        - AttributeName: sk               # Q#<orderIndex zero-padded>
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+  # Fields stored on item:
+  #   sessionId, orderIndex (N), source (ai_generated|template|custom),
+  #   questionText, answerText, answerScore (N 0-10), aiFeedback
+
+  # ===================================
+  # InterviewReports
+  # pk = SESSION#<sessionId>
+  # sk = REPORT (single report per session)
+  # GSI: by applicationId to pull report from application view
+  # ===================================
+  InterviewReportsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "InterviewReports-${EnvironmentName}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk               # SESSION#<sessionId>
+          AttributeType: S
+        - AttributeName: sk               # REPORT
+          AttributeType: S
+        - AttributeName: applicationId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        # Pull report from application detail view
+        - IndexName: ReportByApplication
+          KeySchema:
+            - AttributeName: applicationId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+  # Fields stored on item:
+  #   sessionId, applicationId, overallScore (N 0-10), summary,
+  #   strengths (List of strings), concerns (List of strings),
+  #   autoRecommended (BOOL), generatedAt (ISO string)
+
+  # ===================================
+  # QuestionTemplates
+  # pk = RECRUITER#<recruiterId>
+  # sk = TEMPLATE#<templateId>
+  # GSI: by templateId for direct lookup during session creation
+  # ===================================
+  QuestionTemplatesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "QuestionTemplates-${EnvironmentName}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk               # RECRUITER#<recruiterId>
+          AttributeType: S
+        - AttributeName: sk               # TEMPLATE#<templateId>
+          AttributeType: S
+        - AttributeName: templateId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: TemplateById
+          KeySchema:
+            - AttributeName: templateId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+  # Fields stored on item:
+  #   templateId, recruiterId, name, questions (List of strings),
+  #   isDefault (BOOL), createdAt, updatedAt
+
+  # ===================================
+  # Messages (recruiter <-> seeker thread per application)
+  # pk = APPLICATION#<applicationId>
+  # sk = MSG#<timestamp>#<messageId>  (timestamp prefix keeps sort order)
+  # GSI: by senderId to find all messages sent by a user
+  # ===================================
+  MessagesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "Messages-${EnvironmentName}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk               # APPLICATION#<applicationId>
+          AttributeType: S
+        - AttributeName: sk               # MSG#<timestamp>#<messageId>
+          AttributeType: S
+        - AttributeName: senderId
+          AttributeType: S
+        - AttributeName: messageId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        # All messages sent by a user (inbox-style)
+        - IndexName: MessagesBySender
+          KeySchema:
+            - AttributeName: senderId
+              KeyType: HASH
+            - AttributeName: messageId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+  # Fields stored on item:
+  #   messageId, applicationId, senderId, body,
+  #   read (BOOL), sentAt (ISO string)
+
+  # ===================================
+  # Notifications
+  # pk = USER#<userId>
+  # sk = NOTIF#<timestamp>#<notificationId>
+  # GSI: by applicationId to load all notifications for an application
+  # ===================================
+  NotificationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "Notifications-${EnvironmentName}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk               # USER#<userId>
+          AttributeType: S
+        - AttributeName: sk               # NOTIF#<timestamp>#<notificationId>
+          AttributeType: S
+        - AttributeName: applicationId
+          AttributeType: S
+        - AttributeName: notificationId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        # All notifications tied to an application (for both sides)
+        - IndexName: NotificationsByApplication
+          KeySchema:
+            - AttributeName: applicationId
+              KeyType: HASH
+            - AttributeName: notificationId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+  # Fields stored on item:
+  #   notificationId, userId, applicationId, type (string enum),
+  #   read (BOOL), createdAt (ISO string)
+
+  # ===================================
+  # Users (seekers — separate from recruiter Cognito pool)
+  # pk = USER#<userId>
+  # sk = PROFILE
+  # GSI: UsersByEmail — login lookup by email
+  # ===================================
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "Users-${EnvironmentName}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk               # USER#<userId>
+          AttributeType: S
+        - AttributeName: sk               # PROFILE
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        # Login lookup: find user record by email
+        - IndexName: UsersByEmail
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+  # Fields stored on item:
+  #   userId, email (lowercase), passwordHash, role ('seeker'),
+  #   fullName, location, skills (List of strings), availability,
+  #   bio, cvS3Key, cvUrl, profileComplete (N 0-100),
+  #   createdAt, updatedAt
+
+Outputs:
+  JobsTableName:
+    Value: !Ref JobsTable
+    Export:
+      Name: !Sub "${EnvironmentName}-JobsTable"
+
+  ApplicationsTableName:
+    Value: !Ref ApplicationsTable
+    Export:
+      Name: !Sub "${EnvironmentName}-ApplicationsTable"
+
+  AIInterviewSessionsTableName:
+    Value: !Ref AIInterviewSessionsTable
+    Export:
+      Name: !Sub "${EnvironmentName}-AIInterviewSessionsTable"
+
+  InterviewQuestionsTableName:
+    Value: !Ref InterviewQuestionsTable
+    Export:
+      Name: !Sub "${EnvironmentName}-InterviewQuestionsTable"
+
+  InterviewReportsTableName:
+    Value: !Ref InterviewReportsTable
+    Export:
+      Name: !Sub "${EnvironmentName}-InterviewReportsTable"
+
+  QuestionTemplatesTableName:
+    Value: !Ref QuestionTemplatesTable
+    Export:
+      Name: !Sub "${EnvironmentName}-QuestionTemplatesTable"
+
+  MessagesTableName:
+    Value: !Ref MessagesTable
+    Export:
+      Name: !Sub "${EnvironmentName}-MessagesTable"
+
+  NotificationsTableName:
+    Value: !Ref NotificationsTable
+    Export:
+      Name: !Sub "${EnvironmentName}-NotificationsTable"
+
+  UsersTableName:
+    Value: !Ref UsersTable
+    Export:
+      Name: !Sub "${EnvironmentName}-UsersTable"

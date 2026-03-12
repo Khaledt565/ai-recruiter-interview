@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apply — TalentAI</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --accent: #6366f1; --accent-light: #818cf8; --accent-glow: rgba(99,102,241,0.15);
+      --bg: #f5f6fa; --surface: #ffffff; --border: #e5e7eb;
+      --text: #111827; --muted: #6b7280; --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+    .navbar { background: #0f0f1a; padding: 0 32px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .nav-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-brand-icon { width: 34px; height: 34px; background: linear-gradient(135deg, var(--accent), #a855f7); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+    .nav-brand-name { font-size: 15px; font-weight: 700; color: #fff; }
+    .nav-link { color: rgba(255,255,255,0.65); text-decoration: none; font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 7px; }
+    .nav-link:hover { color: #fff; }
+
+    .breadcrumb { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 32px; font-size: 13px; color: var(--muted); }
+    .breadcrumb a { color: var(--accent); text-decoration: none; }
+
+    .main { max-width: 680px; margin: 32px auto; padding: 0 24px; }
+
+    /* ── Job summary card ── */
+    .job-summary { background: var(--surface); border-radius: var(--radius); border: 1.5px solid var(--border); padding: 18px 22px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 14px; box-shadow: var(--shadow); }
+    .job-summary-logo { width: 44px; height: 44px; border-radius: 10px; background: linear-gradient(135deg, var(--accent-glow), rgba(168,85,247,0.15)); display: flex; align-items: center; justify-content: center; font-size: 20px; border: 1.5px solid var(--border); flex-shrink: 0; }
+    .job-summary-title { font-size: 16px; font-weight: 800; margin-bottom: 3px; }
+    .job-summary-meta { font-size: 12.5px; color: var(--muted); }
+
+    /* ── Sections ── */
+    .card { background: var(--surface); border-radius: var(--radius); border: 1.5px solid var(--border); padding: 24px 26px; margin-bottom: 16px; box-shadow: var(--shadow); }
+    .card-title { font-size: 15.5px; font-weight: 800; margin-bottom: 6px; }
+    .card-sub { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; }
+    .form-input { width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 9px; font-size: 14px; color: var(--text); outline: none; transition: border-color 0.15s; background: var(--surface); }
+    .form-input:focus { border-color: var(--accent); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    textarea.form-input { min-height: 120px; resize: vertical; }
+    .char-count { font-size: 11.5px; color: var(--muted); text-align: right; margin-top: 3px; }
+
+    /* ── Profile prefill notice ── */
+    .prefill-notice { display: flex; align-items: center; gap: 8px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 9px; padding: 10px 14px; font-size: 12.5px; color: #1e40af; margin-bottom: 18px; }
+    .prefill-notice a { color: var(--accent); font-weight: 600; }
+
+    /* ── CV section ── */
+    .cv-box { border: 1.5px solid var(--border); border-radius: 10px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; }
+    .cv-box-icon { font-size: 22px; flex-shrink: 0; }
+    .cv-box-info { flex: 1; }
+    .cv-box-name { font-size: 14px; font-weight: 600; }
+    .cv-box-sub  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .cv-box-change { font-size: 12.5px; color: var(--accent); cursor: pointer; font-weight: 600; text-decoration: none; }
+    .cv-box-change:hover { text-decoration: underline; }
+    .cv-upload-inline { display: none; }
+    .cv-upload-inline.visible { display: block; }
+    .cv-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 22px; text-align: center; cursor: pointer; transition: all 0.2s; position: relative; margin-top: 12px; }
+    .cv-zone:hover { border-color: var(--accent); background: var(--accent-glow); }
+    .cv-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+    .cv-warning { background: #fffbeb; border: 1px solid #fde68a; border-radius: 9px; padding: 10px 14px; font-size: 12.5px; color: #92400e; margin-top: 12px; }
+
+    /* ── CV text extraction ── */
+    .cv-text-section { display: none; }
+    .cv-text-section.visible { display: block; }
+
+    /* ── Submit ── */
+    .submit-btn { width: 100%; padding: 13px; background: var(--accent); color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; transition: background 0.15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .submit-btn:hover:not(:disabled) { background: #4f46e5; }
+    .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* ── Success screen ── */
+    .success-screen { display: none; background: var(--surface); border-radius: var(--radius); border: 1.5px solid #bbf7d0; box-shadow: var(--shadow); padding: 48px 32px; text-align: center; }
+    .success-screen.visible { display: block; }
+    .success-icon { font-size: 52px; margin-bottom: 16px; }
+    .success-title { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+    .success-sub { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 28px; }
+    .success-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn-link { display: inline-flex; align-items: center; gap: 6px; padding: 10px 22px; border-radius: 9px; font-size: 13.5px; font-weight: 600; text-decoration: none; border: none; cursor: pointer; }
+    .btn-primary-link { background: var(--accent); color: #fff; }
+    .btn-primary-link:hover { background: #4f46e5; }
+    .btn-outline-link { background: transparent; border: 1.5px solid var(--border); color: var(--text); }
+    .btn-outline-link:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Alert ── */
+    .alert { padding: 11px 14px; border-radius: 9px; font-size: 13px; font-weight: 500; margin-bottom: 16px; display: none; }
+    .alert.visible { display: block; }
+    .alert-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+    .spinner { width: 16px; height: 16px; border: 2.5px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 560px) {
+      .form-row { grid-template-columns: 1fr; }
+      .main { padding: 0 14px; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="jobs.html" class="nav-brand">
+    <div class="nav-brand-icon">✦</div>
+    <span class="nav-brand-name">TalentAI</span>
+  </a>
+  <div class="nav-actions">
+    <a href="seeker-applications.html" class="nav-link">My Applications</a>
+    <a href="seeker-profile.html" class="nav-link">My Profile</a>
+  </div>
+</nav>
+
+<div class="breadcrumb">
+  <span id="breadcrumbJob"><a href="jobs.html">Jobs</a></span>
+</div>
+
+<div class="main">
+
+  <!-- Job summary (populated on load) -->
+  <div class="job-summary" id="jobSummary">
+    <div class="job-summary-logo">🏢</div>
+    <div>
+      <div class="job-summary-title" id="jobSummaryTitle">Loading…</div>
+      <div class="job-summary-meta" id="jobSummaryMeta"></div>
+    </div>
+  </div>
+
+  <!-- Apply form (hidden when submitted) -->
+  <div id="applyForm">
+    <div class="alert alert-error" id="formError"></div>
+
+    <!-- Your details -->
+    <div class="card">
+      <h2 class="card-title">Your details</h2>
+      <p class="card-sub">Pre-filled from your profile. Edit as needed.</p>
+      <div class="prefill-notice" id="prefillNotice">
+        ℹ️ Details loaded from <a href="seeker-profile.html">your profile</a>. Update your profile to change these permanently.
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="candidateName">Full name</label>
+          <input type="text" id="candidateName" class="form-input" placeholder="Jane Smith" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="candidateEmail">Email address</label>
+          <input type="email" id="candidateEmail" class="form-input" placeholder="jane@example.com" required />
+        </div>
+      </div>
+    </div>
+
+    <!-- Cover letter -->
+    <div class="card">
+      <h2 class="card-title">Cover letter</h2>
+      <p class="card-sub">Tell the employer why you're a great fit. Keep it concise.</p>
+      <div class="form-group">
+        <label class="form-label" for="coverLetter">Cover letter <span style="color:var(--muted);font-weight:400">(optional but recommended)</span></label>
+        <textarea id="coverLetter" class="form-input" rows="6" placeholder="Hi, I'm excited to apply for this role because…" maxlength="3000" oninput="updateCoverCount()"></textarea>
+        <p class="char-count"><span id="coverCount">0</span> / 3000</p>
+      </div>
+    </div>
+
+    <!-- CV -->
+    <div class="card">
+      <h2 class="card-title">CV / Résumé</h2>
+      <p class="card-sub" id="cvCardSub">Your CV will be used for AI profile matching.</p>
+
+      <!-- Has CV from profile -->
+      <div id="cvExisting" style="display:none">
+        <div class="cv-box">
+          <span class="cv-box-icon">📄</span>
+          <div class="cv-box-info">
+            <div class="cv-box-name">CV on file</div>
+            <div class="cv-box-sub">Previously uploaded to your profile</div>
+          </div>
+          <a href="seeker-profile.html" class="cv-box-change">Change CV →</a>
+        </div>
+      </div>
+
+      <!-- No CV — must upload now -->
+      <div id="cvRequired" style="display:none">
+        <div class="cv-warning">⚠️ You haven't uploaded a CV yet. Please upload one to apply.</div>
+        <div class="cv-zone">
+          <input type="file" id="cvFileInput" accept=".pdf,.doc,.docx" onchange="handleCvUpload(this.files[0])" />
+          <div style="font-size:24px;margin-bottom:6px">📤</div>
+          <div style="font-size:13.5px;font-weight:600" id="cvUploadLabel">Drop your CV or click to browse</div>
+          <div style="font-size:12px;color:var(--muted)">PDF, DOC, or DOCX — max 10 MB</div>
+        </div>
+      </div>
+
+      <!-- CV text for AI (extracted or pasted) -->
+      <div class="cv-text-section" id="cvTextSection">
+        <div style="margin-top:16px">
+          <label class="form-label" for="cvText">CV text <span style="color:var(--muted);font-weight:400">(for AI matching — paste or extract from your CV)</span></label>
+          <textarea id="cvText" class="form-input" rows="7" placeholder="Paste the text content of your CV here for AI profile analysis…" maxlength="20000"></textarea>
+          <p style="font-size:11.5px;color:var(--muted);margin-top:4px">The AI will use this text to assess your fit for the role. Max 20,000 characters.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submit -->
+    <div class="card">
+      <button class="submit-btn" id="submitBtn" onclick="submitApplication()">
+        Submit application
+      </button>
+    </div>
+  </div>
+
+  <!-- Success screen -->
+  <div class="success-screen" id="successScreen">
+    <div class="success-icon">🎉</div>
+    <h2 class="success-title">Application submitted!</h2>
+    <p class="success-sub" id="successMsg">
+      Your application has been received and our AI is reviewing your profile.<br>
+      If you're a strong fit, you'll receive an interview invitation by email.
+    </p>
+    <div class="success-actions">
+      <a href="seeker-applications.html" class="btn-link btn-primary-link">View my applications</a>
+      <a href="jobs.html" class="btn-link btn-outline-link">Browse more jobs</a>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  var token   = localStorage.getItem('seeker_token');
+  var seekerId = localStorage.getItem('seeker_id');
+  if (!token || !seekerId) {
+    var jobId = new URLSearchParams(window.location.search).get('jobId') || '';
+    window.location.replace('seeker-login.html?redirect=' + encodeURIComponent('seeker-apply.html?jobId=' + jobId));
+  }
+
+  var params = new URLSearchParams(window.location.search);
+  var jobId  = params.get('jobId');
+  if (!jobId) { window.location.replace('jobs.html'); }
+
+  var backendHost = ['localhost',''].includes(window.location.hostname)
+    ? 'localhost:8080'
+    : 'l05uyc9rza.execute-api.eu-central-1.amazonaws.com/prod';
+  var backendProtocol = ['localhost',''].includes(window.location.hostname) ? 'http' : 'https';
+  var BACKEND_URL = backendProtocol + '://' + backendHost;
+
+  var profileCvUrl = null;
+  var uploadedCvText = null;
+
+  function esc(s) { return String(s || '').replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function empLabel(t) { return t === 'full-time' ? 'Full-time' : t === 'part-time' ? 'Part-time' : t === 'contract' ? 'Contract' : t || ''; }
+  function updateCoverCount() {
+    document.getElementById('coverCount').textContent = document.getElementById('coverLetter').value.length;
+  }
+
+  function showError(msg) {
+    var el = document.getElementById('formError');
+    el.textContent = msg;
+    el.classList.add('visible');
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  function hideError() { document.getElementById('formError').classList.remove('visible'); }
+
+  // ── Load job details ──────────────────────────────────────────────
+  fetch(BACKEND_URL + '/public/jobs/' + encodeURIComponent(jobId))
+    .then(function(r) { if (!r.ok) throw new Error(); return r.json(); })
+    .then(function(job) {
+      document.title = 'Apply — ' + job.title + ' — TalentAI';
+      document.getElementById('jobSummaryTitle').textContent = job.title;
+      var meta = [];
+      if (job.location) meta.push(job.location);
+      if (job.employmentType) meta.push(empLabel(job.employmentType));
+      document.getElementById('jobSummaryMeta').textContent = meta.join(' · ');
+      document.getElementById('breadcrumbJob').innerHTML = '<a href="jobs.html">Jobs</a> › <a href="job-detail.html?id=' + esc(jobId) + '">' + esc(job.title) + '</a> › Apply';
+    })
+    .catch(function() {
+      document.getElementById('jobSummaryTitle').textContent = 'Job not found';
+    });
+
+  // ── Load profile for prefill ──────────────────────────────────────
+  fetch(BACKEND_URL + '/seeker/profile', { headers: { 'Authorization': 'Bearer ' + token } })
+    .then(function(r) { if (!r.ok) throw new Error(); return r.json(); })
+    .then(function(profile) {
+      document.getElementById('candidateName').value  = profile.fullName || '';
+      document.getElementById('candidateEmail').value = profile.email || '';
+      profileCvUrl = profile.cvUrl || null;
+
+      if (profileCvUrl) {
+        document.getElementById('cvExisting').style.display = '';
+        document.getElementById('cvTextSection').classList.add('visible');
+      } else {
+        document.getElementById('cvRequired').style.display = '';
+        document.getElementById('cvTextSection').classList.add('visible');
+      }
+    })
+    .catch(function() {
+      document.getElementById('candidateEmail').value = localStorage.getItem('seeker_email') || '';
+      document.getElementById('candidateName').value  = localStorage.getItem('seeker_name')  || '';
+      document.getElementById('cvRequired').style.display = '';
+      document.getElementById('cvTextSection').classList.add('visible');
+    });
+
+  // ── Inline CV upload (for applicants without a CV on file) ───────
+  function handleCvUpload(file) {
+    if (!file) return;
+    var allowed = ['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowed.includes(file.type)) { showError('Please upload a PDF or Word document'); return; }
+    if (file.size > 10 * 1024 * 1024) { showError('File must be under 10 MB'); return; }
+    // Read file as base64 and upload to get cvUrl, then fill cvText
+    var reader = new FileReader();
+    document.getElementById('cvUploadLabel').textContent = 'Uploading "' + file.name + '"…';
+    reader.onload = function(e) {
+      var base64 = e.target.result.split(',')[1];
+      fetch(BACKEND_URL + '/seeker/profile/cv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ base64: base64, mimeType: file.type, filename: file.name }),
+      })
+        .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+        .then(function(res) {
+          if (!res.ok) { showError('CV upload failed: ' + (res.data.error || 'unknown error')); return; }
+          profileCvUrl = res.data.cvUrl;
+          document.getElementById('cvUploadLabel').textContent = '✓ ' + file.name + ' uploaded';
+          document.getElementById('cvExisting').style.display = '';
+          document.getElementById('cvRequired').style.display = 'none';
+        })
+        .catch(function() { showError('CV upload failed — please try again'); });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ── Submit ────────────────────────────────────────────────────────
+  function submitApplication() {
+    hideError();
+    var name   = document.getElementById('candidateName').value.trim();
+    var email  = document.getElementById('candidateEmail').value.trim();
+    var cover  = document.getElementById('coverLetter').value.trim();
+    var cvText = document.getElementById('cvText').value.trim();
+
+    if (!name)  { showError('Please enter your full name'); return; }
+    if (!email || !email.includes('@')) { showError('Please enter a valid email address'); return; }
+    if (!cvText || cvText.length < 50) { showError('Please paste the text content of your CV (minimum 50 characters) so our AI can assess your fit'); return; }
+
+    var btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner"></div> Submitting…';
+
+    fetch(BACKEND_URL + '/applications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jobId:          jobId,
+        seekerId:       seekerId,
+        candidateName:  name,
+        candidateEmail: email,
+        cvText:         cvText,
+        coverLetter:    cover || null,
+      }),
+    })
+      .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+      .then(function(res) {
+        btn.disabled = false;
+        btn.innerHTML = 'Submit application';
+        if (!res.ok) { showError(res.data.error || 'Failed to submit application'); return; }
+        // Show success screen
+        var msg = res.data.status === 'interview_invited'
+          ? 'Your profile scored well! Check your email for an AI interview invitation.'
+          : 'Your application has been received. You\'ll hear back soon.';
+        document.getElementById('successMsg').textContent = msg;
+        document.getElementById('applyForm').style.display = 'none';
+        document.getElementById('successScreen').classList.add('visible');
+        document.getElementById('jobSummary').style.display = 'none';
+      })
+      .catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = 'Submit application';
+        showError('Network error — please try again');
+      });
+  }
+</script>
+</body>
+</html>

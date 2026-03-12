@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Profile — TalentAI</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --accent: #6366f1; --accent-light: #818cf8; --accent-glow: rgba(99,102,241,0.15);
+      --bg: #f5f6fa; --surface: #ffffff; --border: #e5e7eb;
+      --text: #111827; --muted: #6b7280; --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+    .navbar { background: #0f0f1a; padding: 0 32px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .nav-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .nav-brand-icon { width: 34px; height: 34px; background: linear-gradient(135deg, var(--accent), #a855f7); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+    .nav-brand-name { font-size: 15px; font-weight: 700; color: #fff; }
+    .nav-actions { display: flex; align-items: center; gap: 10px; }
+    .nav-link { color: rgba(255,255,255,0.65); text-decoration: none; font-size: 13.5px; font-weight: 500; padding: 6px 12px; border-radius: 7px; transition: color 0.15s; }
+    .nav-link:hover { color: #fff; }
+    .nav-btn { display: inline-flex; align-items: center; gap: 5px; padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; text-decoration: none; border: none; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #4f46e5; }
+    .btn-outline-white { background: transparent; border: 1.5px solid rgba(255,255,255,0.25); color: rgba(255,255,255,0.85); }
+    .btn-outline-white:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
+
+    .main { max-width: 700px; margin: 32px auto; padding: 0 24px; }
+
+    /* ── Completion banner ── */
+    .completion-banner { background: var(--surface); border-radius: var(--radius); border: 1.5px solid var(--border); box-shadow: var(--shadow); padding: 20px 24px; margin-bottom: 20px; }
+    .completion-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .completion-title { font-size: 14px; font-weight: 700; }
+    .completion-pct { font-size: 14px; font-weight: 800; color: var(--accent); }
+    .progress-track { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--accent), #a855f7); transition: width 0.6s ease; }
+    .completion-sub { font-size: 12.5px; color: var(--muted); margin-top: 7px; }
+    .completion-sub.complete { color: #059669; font-weight: 600; }
+
+    /* ── Card ── */
+    .card { background: var(--surface); border-radius: var(--radius); border: 1.5px solid var(--border); box-shadow: var(--shadow); padding: 24px 26px; margin-bottom: 16px; }
+    .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .card-title { font-size: 15.5px; font-weight: 800; }
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text); margin-bottom: 5px; }
+    .form-label .optional { color: var(--muted); font-weight: 400; }
+    .form-input { width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 9px; font-size: 14px; color: var(--text); transition: border-color 0.15s; background: var(--surface); outline: none; }
+    .form-input:focus { border-color: var(--accent); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    textarea.form-input { resize: vertical; min-height: 90px; }
+
+    /* ── Tag input ── */
+    .tag-input-wrap { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 42px; padding: 6px 10px; border: 1.5px solid var(--border); border-radius: 9px; background: var(--surface); cursor: text; transition: border-color 0.15s; }
+    .tag-input-wrap:focus-within { border-color: var(--accent); }
+    .tag { display: inline-flex; align-items: center; gap: 4px; background: var(--accent-glow); color: var(--accent); font-size: 12.5px; font-weight: 600; padding: 3px 9px; border-radius: 20px; }
+    .tag-remove { background: none; border: none; cursor: pointer; color: var(--accent); font-size: 14px; line-height: 1; padding: 0 1px; opacity: 0.7; }
+    .tag-remove:hover { opacity: 1; }
+    .tag-input { border: none; outline: none; font-size: 13.5px; min-width: 120px; flex: 1; background: transparent; }
+    .tag-hint { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+
+    /* ── CV Upload zone ── */
+    .cv-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 28px 20px; text-align: center; cursor: pointer; transition: all 0.2s; position: relative; }
+    .cv-zone:hover, .cv-zone.dragover { border-color: var(--accent); background: var(--accent-glow); }
+    .cv-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+    .cv-zone-icon { font-size: 28px; margin-bottom: 8px; }
+    .cv-zone-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .cv-zone-sub { font-size: 12.5px; color: var(--muted); }
+    .cv-current { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 9px; margin-bottom: 14px; }
+    .cv-current-icon { font-size: 20px; flex-shrink: 0; }
+    .cv-current-name { flex: 1; font-size: 13.5px; font-weight: 600; color: #166534; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cv-current-link { font-size: 12px; color: var(--accent); text-decoration: none; }
+    .cv-current-link:hover { text-decoration: underline; }
+
+    /* ── Upload progress ── */
+    .upload-progress { margin-top: 10px; }
+    .upload-bar-track { height: 5px; background: #e5e7eb; border-radius: 3px; overflow: hidden; }
+    .upload-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.2s; }
+    .upload-status { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+
+    /* ── Save button ── */
+    .save-btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 28px; background: var(--accent); color: #fff; border: none; border-radius: 10px; font-size: 14.5px; font-weight: 700; cursor: pointer; transition: background 0.15s; }
+    .save-btn:hover:not(:disabled) { background: #4f46e5; }
+    .save-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .save-row { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+    .save-success { font-size: 13px; color: #059669; font-weight: 600; display: none; }
+
+    /* ── Callout banner (new account) ── */
+    .welcome-banner { background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(168,85,247,0.1)); border: 1.5px solid rgba(99,102,241,0.25); border-radius: var(--radius); padding: 16px 20px; margin-bottom: 20px; }
+    .welcome-banner h3 { font-size: 14px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+    .welcome-banner p { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+    .spinner { width: 15px; height: 15px; border: 2.5px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .toast-wrap { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+    .toast { padding: 12px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 500; box-shadow: 0 4px 20px rgba(0,0,0,0.15); animation: slideUp 0.25s ease; max-width: 340px; }
+    @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .toast-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .toast-error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+
+    @media (max-width: 560px) {
+      .form-row { grid-template-columns: 1fr; }
+      .main { padding: 0 16px; }
+    }
+    /* ── Notification Bell ───────────────────────────────────────── */
+    .notif-wrap { position: relative; }
+    .bell-btn { position: relative; background: none; border: 1.5px solid rgba(255,255,255,0.25); border-radius: 8px; padding: 7px 10px; cursor: pointer; color: rgba(255,255,255,0.85); font-size: 17px; transition: all 0.15s; display: flex; align-items: center; }
+    .bell-btn:hover { border-color: rgba(255,255,255,0.5); color: #fff; }
+    .notif-badge { position: absolute; top: -5px; right: -5px; background: #ef4444; color: #fff; font-size: 10px; font-weight: 700; min-width: 17px; height: 17px; border-radius: 20px; display: flex; align-items: center; justify-content: center; padding: 0 3px; }
+    .notif-dropdown { position: absolute; top: calc(100% + 8px); right: 0; width: 300px; background: #fff; border: 1.5px solid #e5e7eb; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.12); z-index: 300; display: none; flex-direction: column; overflow: hidden; }
+    .notif-dropdown.open { display: flex; }
+    .notif-dd-hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; border-bottom: 1px solid #e5e7eb; }
+    .notif-dd-title { font-size: 14px; font-weight: 700; color: #111827; }
+    .notif-mark-all { font-size: 12px; font-weight: 600; color: #6366f1; background: none; border: none; cursor: pointer; padding: 0; }
+    .notif-dd-list { max-height: 320px; overflow-y: auto; }
+    .notif-item { display: flex; gap: 10px; padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #f3f4f6; transition: background 0.12s; }
+    .notif-item:hover { background: #fafbff; }
+    .notif-item.unread { background: #f5f3ff; }
+    .notif-dot { width: 8px; height: 8px; border-radius: 50%; background: #6366f1; flex-shrink: 0; margin-top: 5px; }
+    .notif-dot.read { background: transparent; border: 1.5px solid #d1d5db; }
+    .notif-item-title { font-size: 13px; font-weight: 600; color: #111827; margin-bottom: 2px; }
+    .notif-item-body  { font-size: 12px; color: #6b7280; line-height: 1.4; }
+    .notif-item-time  { font-size: 11px; color: #6b7280; margin-top: 3px; }
+    .notif-empty { text-align: center; padding: 28px 16px; color: #6b7280; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="jobs.html" class="nav-brand">
+    <div class="nav-brand-icon">✦</div>
+    <span class="nav-brand-name">TalentAI</span>
+  </a>
+  <div class="nav-actions">
+    <a href="jobs.html" class="nav-link">Browse Jobs</a>
+    <a href="seeker-applications.html" class="nav-link">My Applications</a>
+    <div class="notif-wrap" id="notifWrap">
+      <button class="bell-btn" onclick="toggleNotifPanel()" id="bellBtn" title="Notifications">&#128276;<span class="notif-badge" id="notifBadge" style="display:none">0</span></button>
+      <div class="notif-dropdown" id="notifDropdown">
+        <div class="notif-dd-hdr">
+          <span class="notif-dd-title">Notifications</span>
+          <button class="notif-mark-all" onclick="markAllNotifsRead()">Mark all read</button>
+        </div>
+        <div class="notif-dd-list" id="notifList"><div class="notif-empty">Loading&#8230;</div></div>
+      </div>
+    </div>
+    <button class="nav-btn btn-outline-white" onclick="seekerSignOut()">Sign out</button>
+  </div>
+</nav>
+
+<div class="main">
+
+  <div id="welcomeBanner" class="welcome-banner" style="display:none">
+    <h3>🎉 Welcome to TalentAI!</h3>
+    <p>Complete your profile to start applying. A complete profile helps our AI match you with the right roles faster.</p>
+  </div>
+
+  <!-- Completion bar -->
+  <div class="completion-banner">
+    <div class="completion-header">
+      <span class="completion-title">Profile completeness</span>
+      <span class="completion-pct" id="pctLabel">0%</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <p class="completion-sub" id="completionSub">Add your details below to improve your match score.</p>
+  </div>
+
+  <!-- Basic info -->
+  <div class="card">
+    <div class="card-header"><h2 class="card-title">Basic information</h2></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label" for="fullName">Full name</label>
+        <input type="text" id="fullName" class="form-input" placeholder="Jane Smith" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="location">Location <span class="optional">(optional)</span></label>
+        <input type="text" id="location" class="form-input" placeholder="e.g. London, UK or Remote" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label" for="availability">Availability</label>
+        <select id="availability" class="form-input">
+          <option value="">Select availability…</option>
+          <option value="immediately">Available immediately</option>
+          <option value="2_weeks">2 weeks notice</option>
+          <option value="1_month">1 month notice</option>
+          <option value="3_months">3 months notice</option>
+          <option value="not_looking">Not actively looking</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Skills -->
+  <div class="card">
+    <div class="card-header"><h2 class="card-title">Skills</h2></div>
+    <div class="form-group">
+      <label class="form-label" for="skillInput">Skills <span class="optional">(press Enter or comma to add)</span></label>
+      <div class="tag-input-wrap" id="skillWrap" onclick="document.getElementById('skillInput').focus()">
+        <input type="text" id="skillInput" class="tag-input" placeholder="Type a skill…" />
+      </div>
+      <p class="tag-hint">e.g. JavaScript, Python, Project Management, React</p>
+    </div>
+  </div>
+
+  <!-- Bio -->
+  <div class="card">
+    <div class="card-header"><h2 class="card-title">About you</h2></div>
+    <div class="form-group">
+      <label class="form-label" for="bio">Bio <span class="optional">(optional, max 2000 chars)</span></label>
+      <textarea id="bio" class="form-input" rows="4" placeholder="A brief summary of your background, what you're looking for, and what makes you great…" maxlength="2000"></textarea>
+    </div>
+  </div>
+
+  <!-- CV Upload -->
+  <div class="card">
+    <div class="card-header"><h2 class="card-title">CV / Résumé</h2></div>
+    <div id="cvCurrentWrap" style="display:none">
+      <div class="cv-current">
+        <span class="cv-current-icon">📄</span>
+        <span class="cv-current-name" id="cvCurrentName">CV uploaded</span>
+        <a href="#" id="cvCurrentLink" target="_blank" class="cv-current-link">View</a>
+      </div>
+    </div>
+    <div class="cv-zone" id="cvZone">
+      <input type="file" id="cvFileInput" accept=".pdf,.doc,.docx" onchange="handleCvFile(this.files[0])" />
+      <div class="cv-zone-icon">📤</div>
+      <div class="cv-zone-title" id="cvZoneTitle">Drop your CV here or click to browse</div>
+      <div class="cv-zone-sub">PDF, DOC, or DOCX — max 10 MB</div>
+    </div>
+    <div class="upload-progress" id="uploadProgress" style="display:none">
+      <div class="upload-bar-track"><div class="upload-bar-fill" id="uploadBarFill" style="width:0%"></div></div>
+      <p class="upload-status" id="uploadStatus">Uploading…</p>
+    </div>
+  </div>
+
+  <!-- Save -->
+  <div class="card">
+    <div class="save-row">
+      <button class="save-btn" id="saveBtn" onclick="saveProfile()">
+        Save profile
+      </button>
+      <span class="save-success" id="saveSuccess">✓ Profile saved</span>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+  var skills = [];
+  var profileData = {};
+  var token = localStorage.getItem('seeker_token');
+  if (!token) { window.location.replace('seeker-login.html'); }
+
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('new') === '1') document.getElementById('welcomeBanner').style.display = '';
+
+  var backendHost = ['localhost',''].includes(window.location.hostname)
+    ? 'localhost:8080'
+    : 'l05uyc9rza.execute-api.eu-central-1.amazonaws.com/prod';
+  var backendProtocol = ['localhost',''].includes(window.location.hostname) ? 'http' : 'https';
+  var BACKEND_URL = backendProtocol + '://' + backendHost;
+
+  function seekerSignOut() {
+    ['seeker_token','seeker_id','seeker_email','seeker_name'].forEach(function(k) { localStorage.removeItem(k); });
+    window.location.replace('jobs.html');
+  }
+
+  function showToast(msg, type) {
+    var w = document.getElementById('toastWrap');
+    var t = document.createElement('div');
+    t.className = 'toast toast-' + (type || 'success');
+    t.textContent = msg;
+    w.appendChild(t);
+    setTimeout(function() { t.remove(); }, 4000);
+  }
+
+  function updateCompletion(pct) {
+    document.getElementById('pctLabel').textContent = pct + '%';
+    document.getElementById('progressFill').style.width = pct + '%';
+    var sub = document.getElementById('completionSub');
+    if (pct >= 100) { sub.textContent = '✓ Profile complete — you\'re ready to apply!'; sub.className = 'completion-sub complete'; }
+    else { sub.textContent = 'Add more details to improve your match score.'; sub.className = 'completion-sub'; }
+  }
+
+  // ── Tag input ──────────────────────────────────────────────────────
+  function renderSkills() {
+    var wrap = document.getElementById('skillWrap');
+    var input = document.getElementById('skillInput');
+    wrap.innerHTML = '';
+    skills.forEach(function(s, i) {
+      var tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.innerHTML = s + '<button class="tag-remove" onclick="removeSkill(' + i + ')" tabindex="-1">×</button>';
+      wrap.appendChild(tag);
+    });
+    wrap.appendChild(input);
+    input.focus();
+  }
+  function removeSkill(i) { skills.splice(i, 1); renderSkills(); }
+  document.getElementById('skillInput').addEventListener('keydown', function(e) {
+    var val = this.value.trim().replace(/,/g, '');
+    if ((e.key === 'Enter' || e.key === ',') && val) {
+      e.preventDefault();
+      if (!skills.includes(val) && skills.length < 30) { skills.push(val); renderSkills(); this.value = ''; }
+    }
+    if (e.key === 'Backspace' && !this.value && skills.length) {
+      skills.pop(); renderSkills();
+    }
+  });
+  document.getElementById('skillInput').addEventListener('blur', function() {
+    var val = this.value.trim().replace(/,/g, '');
+    if (val && !skills.includes(val) && skills.length < 30) { skills.push(val); renderSkills(); this.value = ''; }
+  });
+
+  // ── CV drag and drop ──────────────────────────────────────────────
+  var zone = document.getElementById('cvZone');
+  zone.addEventListener('dragover', function(e) { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', function() { zone.classList.remove('dragover'); });
+  zone.addEventListener('drop', function(e) {
+    e.preventDefault(); zone.classList.remove('dragover');
+    var f = e.dataTransfer.files[0];
+    if (f) handleCvFile(f);
+  });
+
+  function handleCvFile(file) {
+    if (!file) return;
+    var allowed = ['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowed.includes(file.type)) { showToast('Please upload a PDF or Word document', 'error'); return; }
+    if (file.size > 10 * 1024 * 1024) { showToast('File must be under 10 MB', 'error'); return; }
+    document.getElementById('cvZoneTitle').textContent = file.name;
+    uploadCv(file);
+  }
+
+  function uploadCv(file) {
+    var progress = document.getElementById('uploadProgress');
+    var bar      = document.getElementById('uploadBarFill');
+    var status   = document.getElementById('uploadStatus');
+    progress.style.display = '';
+    bar.style.width = '30%';
+    status.textContent = 'Reading file…';
+
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var base64 = e.target.result.split(',')[1];
+      bar.style.width = '60%';
+      status.textContent = 'Uploading…';
+      fetch(BACKEND_URL + '/seeker/profile/cv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ base64: base64, mimeType: file.type, filename: file.name }),
+      })
+        .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+        .then(function(res) {
+          bar.style.width = '100%';
+          if (!res.ok) { status.textContent = 'Upload failed: ' + (res.data.error || 'Unknown error'); showToast('CV upload failed', 'error'); return; }
+          status.textContent = '✓ CV uploaded successfully';
+          profileData.cvUrl = res.data.cvUrl;
+          document.getElementById('cvCurrentWrap').style.display = '';
+          var nameEl = document.getElementById('cvCurrentName');
+          var linkEl = document.getElementById('cvCurrentLink');
+          nameEl.textContent = file.name;
+          linkEl.href = res.data.cvUrl;
+          showToast('CV uploaded successfully', 'success');
+          // Reload profile to get updated completion %
+          loadProfile();
+        })
+        .catch(function() { status.textContent = 'Upload failed — please try again'; showToast('CV upload failed', 'error'); });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ── Load profile ──────────────────────────────────────────────────
+  function loadProfile() {
+    fetch(BACKEND_URL + '/seeker/profile', { headers: { 'Authorization': 'Bearer ' + token } })
+      .then(function(r) {
+        if (r.status === 401) { window.location.replace('seeker-login.html'); return null; }
+        return r.json();
+      })
+      .then(function(data) {
+        if (!data) return;
+        profileData = data;
+        document.getElementById('fullName').value = data.fullName || '';
+        document.getElementById('location').value = data.location || '';
+        document.getElementById('bio').value = data.bio || '';
+        document.getElementById('availability').value = data.availability || '';
+        skills = Array.isArray(data.skills) ? data.skills.slice() : [];
+        renderSkills();
+        updateCompletion(data.profileComplete || 0);
+        if (data.cvUrl) {
+          document.getElementById('cvCurrentWrap').style.display = '';
+          document.getElementById('cvCurrentLink').href = data.cvUrl;
+          document.getElementById('cvCurrentName').textContent = 'Current CV';
+        }
+        // Update local name
+        if (data.fullName) localStorage.setItem('seeker_name', data.fullName);
+      })
+      .catch(function() { showToast('Failed to load profile — please refresh', 'error'); });
+  }
+
+  // ── Save profile ──────────────────────────────────────────────────
+  function saveProfile() {
+    var btn = document.getElementById('saveBtn');
+    var successEl = document.getElementById('saveSuccess');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner"></div> Saving…';
+    successEl.style.display = 'none';
+
+    var payload = {
+      fullName:     document.getElementById('fullName').value.trim(),
+      location:     document.getElementById('location').value.trim() || null,
+      bio:          document.getElementById('bio').value.trim() || null,
+      availability: document.getElementById('availability').value || null,
+      skills:       skills,
+    };
+
+    fetch(BACKEND_URL + '/seeker/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(payload),
+    })
+      .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+      .then(function(res) {
+        btn.disabled = false;
+        btn.innerHTML = 'Save profile';
+        if (!res.ok) { showToast(res.data.error || 'Failed to save profile', 'error'); return; }
+        updateCompletion(res.data.profileComplete || 0);
+        successEl.style.display = '';
+        setTimeout(function() { successEl.style.display = 'none'; }, 3000);
+        if (payload.fullName) localStorage.setItem('seeker_name', payload.fullName);
+        showToast('Profile saved', 'success');
+        // If there's a "then" redirect (e.g. coming from apply flow), go there
+        var then = params.get('then');
+        if (then) { setTimeout(function() { window.location.href = then; }, 500); }
+      })
+      .catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = 'Save profile';
+        showToast('Network error — please try again', 'error');
+      });
+  }
+
+  function esc(s) { return String(s || '').replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function timeAgo(d) {
+    if (!d) return '\u2014';
+    var s = Math.floor((Date.now() - new Date(d)) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s/60) + 'm ago';
+    if (s < 86400) return Math.floor(s/3600) + 'h ago';
+    return Math.floor(s/86400) + 'd ago';
+  }
+
+  // \u2500\u2500 Notifications Bell \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  var _notifOpen = false;
+  var _notifications = [];
+
+  function toggleNotifPanel() {
+    _notifOpen = !_notifOpen;
+    document.getElementById('notifDropdown').classList.toggle('open', _notifOpen);
+    if (_notifOpen) fetchNotifications();
+  }
+
+  function closeNotifPanel() {
+    _notifOpen = false;
+    document.getElementById('notifDropdown').classList.remove('open');
+  }
+
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('#notifWrap')) closeNotifPanel();
+  });
+
+  function fetchNotifications() {
+    fetch(BACKEND_URL + '/seeker/notifications', { headers: { 'Authorization': 'Bearer ' + token } })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        _notifications = d.notifications || [];
+        renderNotifList();
+        var unread = _notifications.filter(function(n) { return !n.read; }).length;
+        var badge = document.getElementById('notifBadge');
+        badge.textContent = unread > 99 ? '99+' : String(unread);
+        badge.style.display = unread > 0 ? 'flex' : 'none';
+      }).catch(function(){});
+  }
+
+  function renderNotifList() {
+    var el = document.getElementById('notifList');
+    if (!_notifications.length) {
+      el.innerHTML = '<div class="notif-empty">No notifications yet</div>';
+      return;
+    }
+    el.innerHTML = _notifications.map(function(n) {
+      return '<div class="notif-item' + (n.read ? '' : ' unread') + '" onclick="notifClicked(\'' + esc(n.notificationId) + '\',\'' + esc(n.applicationId || '') + '\')">'
+        + '<div class="notif-dot' + (n.read ? ' read' : '') + '"></div>'
+        + '<div style="flex:1">'
+        + '<div class="notif-item-title">' + esc(n.title) + '</div>'
+        + '<div class="notif-item-body">'  + esc(n.body)  + '</div>'
+        + '<div class="notif-item-time">'  + timeAgo(n.createdAt) + '</div>'
+        + '</div></div>';
+    }).join('');
+  }
+
+  function notifClicked(notifId, applicationId) {
+    fetch(BACKEND_URL + '/seeker/notifications/' + encodeURIComponent(notifId) + '/read', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } }).catch(function(){});
+    var n = _notifications.find(function(x) { return x.notificationId === notifId; });
+    if (n) n.read = true;
+    renderNotifList();
+    var unread = _notifications.filter(function(x) { return !x.read; }).length;
+    var badge = document.getElementById('notifBadge');
+    badge.textContent = String(unread);
+    badge.style.display = unread > 0 ? 'flex' : 'none';
+    closeNotifPanel();
+    if (applicationId) window.location.href = 'seeker-applications.html';
+  }
+
+  function markAllNotifsRead() {
+    fetch(BACKEND_URL + '/seeker/notifications/read-all', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token } }).catch(function(){});
+    _notifications.forEach(function(n) { n.read = true; });
+    renderNotifList();
+    document.getElementById('notifBadge').style.display = 'none';
+  }
+
+  setInterval(fetchNotifications, 45000);
+  fetchNotifications();
+
+  loadProfile();
+</script>
+</body>
+</html>

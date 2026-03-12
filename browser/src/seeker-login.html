@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign in — TalentAI</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --accent: #6366f1; --accent-light: #818cf8;
+      --bg: #f5f6fa; --surface: #ffffff; --border: #e5e7eb;
+      --text: #111827; --muted: #6b7280; --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.08);
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif; background: linear-gradient(135deg, #0f0f1a 0%, #1e1b4b 100%); min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+
+    .logo-wrap { text-align: center; margin-bottom: 28px; }
+    .logo-icon { width: 48px; height: 48px; background: linear-gradient(135deg, var(--accent), #a855f7); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 22px; margin: 0 auto 10px; }
+    .logo-name { font-size: 20px; font-weight: 800; color: #fff; }
+    .logo-sub  { font-size: 13px; color: rgba(255,255,255,0.45); margin-top: 3px; }
+
+    .card { background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); padding: 36px 36px 28px; width: 100%; max-width: 420px; }
+
+    /* Tabs */
+    .tabs { display: flex; background: #f3f4f6; border-radius: 10px; padding: 3px; margin-bottom: 28px; }
+    .tab { flex: 1; padding: 8px; text-align: center; border-radius: 8px; font-size: 13.5px; font-weight: 600; cursor: pointer; color: var(--muted); transition: all 0.15s; border: none; background: transparent; }
+    .tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+
+    .form-section { display: none; }
+    .form-section.active { display: block; }
+    .form-title { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+    .form-sub { font-size: 13px; color: var(--muted); margin-bottom: 24px; line-height: 1.5; }
+
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text); margin-bottom: 5px; }
+    .form-input { width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 9px; font-size: 14px; color: var(--text); transition: border-color 0.15s; background: var(--surface); outline: none; }
+    .form-input:focus { border-color: var(--accent); }
+    .form-input.error { border-color: #f87171; }
+
+    .form-error { font-size: 12px; color: #dc2626; margin-top: 4px; display: none; }
+    .form-error.visible { display: block; }
+
+    .submit-btn { width: 100%; padding: 12px; background: var(--accent); color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; transition: background 0.15s; margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .submit-btn:hover:not(:disabled) { background: #4f46e5; }
+    .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .spinner { width: 16px; height: 16px; border: 2.5px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .link-row { text-align: center; margin-top: 18px; font-size: 13px; color: var(--muted); }
+    .link-row a { color: var(--accent); text-decoration: none; font-weight: 600; cursor: pointer; }
+    .link-row a:hover { text-decoration: underline; }
+
+    .divider-bar { text-align: center; margin: 14px 0 0; font-size: 12px; color: #9ca3af; }
+    .back-link { display: block; text-align: center; color: rgba(255,255,255,0.45); font-size: 13px; text-decoration: none; margin-top: 20px; }
+    .back-link:hover { color: rgba(255,255,255,0.7); }
+
+    .alert { padding: 11px 14px; border-radius: 9px; font-size: 13px; font-weight: 500; margin-bottom: 16px; display: none; }
+    .alert.visible { display: block; }
+    .alert-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    .alert-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+
+    .pw-strength { height: 4px; border-radius: 2px; background: #e5e7eb; margin-top: 6px; overflow: hidden; }
+    .pw-strength-bar { height: 100%; border-radius: 2px; transition: width 0.3s, background 0.3s; width: 0; }
+  </style>
+</head>
+<body>
+
+<div class="logo-wrap">
+  <div class="logo-icon">✦</div>
+  <div class="logo-name">TalentAI</div>
+  <div class="logo-sub">Your AI-powered career platform</div>
+</div>
+
+<div class="card">
+  <div class="tabs">
+    <button class="tab active" id="tabSignIn" onclick="switchTab('signin')">Sign in</button>
+    <button class="tab" id="tabSignUp" onclick="switchTab('signup')">Create account</button>
+  </div>
+
+  <!-- Sign in form -->
+  <div class="form-section active" id="sectionSignin">
+    <p class="form-title">Welcome back</p>
+    <p class="form-sub">Sign in to access your applications and profile.</p>
+    <div class="alert alert-error" id="signinError"></div>
+    <form id="signinForm" onsubmit="doSignIn(event)">
+      <div class="form-group">
+        <label class="form-label" for="signinEmail">Email address</label>
+        <input type="email" id="signinEmail" class="form-input" placeholder="you@example.com" autocomplete="email" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="signinPassword">Password</label>
+        <input type="password" id="signinPassword" class="form-input" placeholder="••••••••" autocomplete="current-password" required />
+      </div>
+      <button type="submit" class="submit-btn" id="signinBtn">Sign in</button>
+    </form>
+    <div class="link-row">Don't have an account? <a onclick="switchTab('signup')">Create one</a></div>
+  </div>
+
+  <!-- Sign up form -->
+  <div class="form-section" id="sectionSignup">
+    <p class="form-title">Create your account</p>
+    <p class="form-sub">Join TalentAI to find your next role and apply in minutes.</p>
+    <div class="alert alert-error" id="signupError"></div>
+    <form id="signupForm" onsubmit="doSignUp(event)">
+      <div class="form-group">
+        <label class="form-label" for="signupName">Full name</label>
+        <input type="text" id="signupName" class="form-input" placeholder="Jane Smith" autocomplete="name" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="signupEmail">Email address</label>
+        <input type="email" id="signupEmail" class="form-input" placeholder="you@example.com" autocomplete="email" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="signupPassword">Password <span style="color:var(--muted);font-weight:400">(min. 8 characters)</span></label>
+        <input type="password" id="signupPassword" class="form-input" placeholder="Create a strong password" autocomplete="new-password" minlength="8" required oninput="updatePwStrength(this.value)" />
+        <div class="pw-strength"><div class="pw-strength-bar" id="pwBar"></div></div>
+      </div>
+      <button type="submit" class="submit-btn" id="signupBtn">Create account</button>
+    </form>
+    <div class="link-row">Already have an account? <a onclick="switchTab('signin')">Sign in</a></div>
+  </div>
+
+  <div class="divider-bar">Recruiter? <a href="recruiter-login.html" style="color:var(--accent);font-weight:600;text-decoration:none">Sign in here →</a></div>
+</div>
+
+<a href="jobs.html" class="back-link">← Browse jobs without signing in</a>
+
+<script>
+  var redirectUrl = new URLSearchParams(window.location.search).get('redirect') || 'seeker-profile.html';
+
+  // If already signed in, go to redirect
+  if (localStorage.getItem('seeker_token')) {
+    window.location.replace(redirectUrl);
+  }
+
+  var backendHost = ['localhost',''].includes(window.location.hostname)
+    ? 'localhost:8080'
+    : 'l05uyc9rza.execute-api.eu-central-1.amazonaws.com/prod';
+  var backendProtocol = ['localhost',''].includes(window.location.hostname) ? 'http' : 'https';
+  var BACKEND_URL = backendProtocol + '://' + backendHost;
+
+  function switchTab(tab) {
+    document.getElementById('tabSignIn').classList.toggle('active', tab === 'signin');
+    document.getElementById('tabSignUp').classList.toggle('active', tab === 'signup');
+    document.getElementById('sectionSignin').classList.toggle('active', tab === 'signin');
+    document.getElementById('sectionSignup').classList.toggle('active', tab === 'signup');
+  }
+
+  function setLoading(btnId, loading) {
+    var btn = document.getElementById(btnId);
+    if (loading) {
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div>';
+    } else {
+      btn.disabled = false;
+      btn.innerHTML = btnId === 'signinBtn' ? 'Sign in' : 'Create account';
+    }
+  }
+
+  function showError(id, msg) {
+    var el = document.getElementById(id);
+    el.textContent = msg;
+    el.classList.add('visible');
+  }
+  function hideError(id) { document.getElementById(id).classList.remove('visible'); }
+
+  function updatePwStrength(val) {
+    var bar = document.getElementById('pwBar');
+    var score = 0;
+    if (val.length >= 8) score++;
+    if (/[A-Z]/.test(val)) score++;
+    if (/[0-9]/.test(val)) score++;
+    if (/[^A-Za-z0-9]/.test(val)) score++;
+    var colors = ['#ef4444','#f97316','#eab308','#22c55e'];
+    bar.style.width = (score * 25) + '%';
+    bar.style.background = colors[score - 1] || '#e5e7eb';
+  }
+
+  function doSignIn(e) {
+    e.preventDefault();
+    hideError('signinError');
+    var email    = document.getElementById('signinEmail').value.trim();
+    var password = document.getElementById('signinPassword').value;
+    if (!email || !password) { showError('signinError', 'Please fill in all fields'); return; }
+    setLoading('signinBtn', true);
+    fetch(BACKEND_URL + '/seeker/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, password: password }),
+    })
+      .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+      .then(function(res) {
+        setLoading('signinBtn', false);
+        if (!res.ok) { showError('signinError', res.data.error || 'Login failed'); return; }
+        localStorage.setItem('seeker_token', res.data.token);
+        localStorage.setItem('seeker_id', res.data.userId);
+        localStorage.setItem('seeker_email', res.data.email);
+        localStorage.setItem('seeker_name', res.data.fullName || '');
+        window.location.replace(redirectUrl);
+      })
+      .catch(function() { setLoading('signinBtn', false); showError('signinError', 'Network error — please try again'); });
+  }
+
+  function doSignUp(e) {
+    e.preventDefault();
+    hideError('signupError');
+    var fullName = document.getElementById('signupName').value.trim();
+    var email    = document.getElementById('signupEmail').value.trim();
+    var password = document.getElementById('signupPassword').value;
+    if (!fullName || !email || !password) { showError('signupError', 'Please fill in all fields'); return; }
+    if (password.length < 8) { showError('signupError', 'Password must be at least 8 characters'); return; }
+    setLoading('signupBtn', true);
+    fetch(BACKEND_URL + '/seeker/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, password: password, fullName: fullName }),
+    })
+      .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+      .then(function(res) {
+        setLoading('signupBtn', false);
+        if (!res.ok) { showError('signupError', res.data.error || 'Signup failed'); return; }
+        localStorage.setItem('seeker_token', res.data.token);
+        localStorage.setItem('seeker_id', res.data.userId);
+        localStorage.setItem('seeker_email', res.data.email);
+        localStorage.setItem('seeker_name', res.data.fullName || '');
+        // New accounts go to profile setup first
+        window.location.replace('seeker-profile.html?new=1' + (redirectUrl !== 'seeker-profile.html' ? '&then=' + encodeURIComponent(redirectUrl) : ''));
+      })
+      .catch(function() { setLoading('signupBtn', false); showError('signupError', 'Network error — please try again'); });
+  }
+</script>
+</body>
+</html>

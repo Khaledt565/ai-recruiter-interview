@@ -1,4 +1,4 @@
-﻿// backend/src/server.js
+// backend/src/server.js
 // Fargate Express server with WebSocket support + Interview Link Generation
 
 import express from 'express';
@@ -32,6 +32,11 @@ const AI_SESSIONS_TABLE       = process.env.AI_SESSIONS_TABLE        || 'AIInter
 const QUESTION_TEMPLATES_TABLE = process.env.QUESTION_TEMPLATES_TABLE || 'QuestionTemplates-dev';
 const INTERVIEW_REPORTS_TABLE  = process.env.INTERVIEW_REPORTS_TABLE  || 'InterviewReports-dev';
 const COGNITO_USER_POOL_ID    = process.env.COGNITO_USER_POOL_ID     || 'eu-central-1_JbO8lhpi2';
+const USERS_TABLE             = process.env.USERS_TABLE              || 'Users-dev';
+const S3_CV_BUCKET            = process.env.S3_CV_BUCKET             || 'ai-recruiter-interviews-090605004529';
+const SEEKER_JWT_SECRET       = process.env.SEEKER_JWT_SECRET        || 'seeker-dev-secret-change-in-prod';
+const NOTIFICATIONS_TABLE     = process.env.NOTIFICATIONS_TABLE      || 'Notifications-dev';
+const MESSAGES_TABLE          = process.env.MESSAGES_TABLE           || 'Messages-dev';
 
 const polly = new PollyClient({ region: REGION });
 const s3 = new S3Client({ region: REGION });
@@ -80,8 +85,23 @@ function requireAuth(req, res, next) {
   });
 }
 
+function requireSeekerAuth(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return res.status(401).json({ error: 'Authentication required' });
+  try {
+    const decoded = jwt.verify(token, SEEKER_JWT_SECRET, { algorithms: ['HS256'] });
+    if (decoded.role !== 'seeker') return res.status(403).json({ error: 'Forbidden' });
+    req.seekerId = decoded.sub;
+    req.seekerEmail = decoded.email;
+    next();
+  } catch {
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Save full interview conversation to S3 (called on completion, disconnection, or explicit end)
 async function saveInterviewSnapshot(meetingId, attendeeId, status) {
@@ -388,10 +408,117 @@ async function finalizeInterviewPipeline(interviewId, meta, history, jobDescript
     const recruiterEmail = meta.recruiterEmail || app.recruiterId || '';
     await sendInterviewCompleteNotification(recruiterEmail, meta.candidateName, jobTitle, combinedScore, interviewId);
 
+    // 7. In-app notification for recruiter
+    const notifType  = autoRecommended ? 'recommended' : 'ai_interview_complete';
+    const notifTitle = autoRecommended
+      ? `⭐ Recommended – ${meta.candidateName || 'Candidate'}`
+      : `Interview complete – ${meta.candidateName || 'Candidate'}`;
+    const notifBody  = autoRecommended
+      ? `${meta.candidateName} is AI-recommended for ${jobTitle} (score: ${combinedScore}%)`
+      : `${meta.candidateName} completed their AI interview for ${jobTitle} (score: ${combinedScore}%)`;
+    createNotification(recruiterEmail, notifType, meta.applicationId, meta.jobId, notifTitle, notifBody).catch(() => {});
+
     console.log(`✅ ${tag} Pipeline finalized — status: ${autoRecommended ? 'recommended' : 'ai_interview_complete'}`);
   } catch (err) {
     console.error(`❌ ${tag} Pipeline finalization failed:`, err.message);
     throw err;
+  }
+}
+
+// ── Notification helpers ────────────────────────────────────────────────────
+async function createNotification(userId, type, applicationId, jobId, title, body) {
+  try {
+    if (!userId) return;
+    const now     = new Date().toISOString();
+    const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    await ddb.send(new PutCommand({
+      TableName: NOTIFICATIONS_TABLE,
+      Item: {
+        pk:             `USER#${userId}`,
+        sk:             `NOTIF#${now}#${notifId}`,
+        notificationId: notifId,
+        userId,
+        applicationId:  applicationId || null,
+        jobId:          jobId || null,
+        type,
+        title,
+        body:           body || '',
+        read:           false,
+        createdAt:      now,
+      },
+    }));
+  } catch (e) {
+    console.error('createNotification error:', e.message);
+  }
+}
+
+async function notifyStatusChange(newStatus, app) {
+  const { applicationId, jobId, seekerId, recruiterId, candidateName, candidateEmail } = app;
+  // Fetch job title if not provided
+  let jobTitle = app.jobTitle || null;
+  if (!jobTitle && jobId) {
+    try {
+      const jr = await ddb.send(new QueryCommand({
+        TableName: JOBS_TABLE,
+        IndexName: 'JobsByJobId',
+        KeyConditionExpression: 'jobId = :jid',
+        ExpressionAttributeValues: { ':jid': jobId },
+        Limit: 1,
+      }));
+      jobTitle = (jr.Items && jr.Items[0] && jr.Items[0].title) || null;
+    } catch { /* ignore */ }
+  }
+  const jt = jobTitle || 'a role';
+
+  const NOTIF_MAP = {
+    shortlisted: {
+      userId: seekerId, sesTo: candidateEmail,
+      title: `You've been shortlisted – ${jt}`,
+      body:  `Congratulations! You are shortlisted for ${jt}`,
+      sesSubject: `Great news – you've been shortlisted for ${jt}`,
+      sesBody: `Congratulations! You have been shortlisted for the position: ${jt}.\n\nYour recruiter will be in touch with next steps.`,
+    },
+    human_interview: {
+      userId: seekerId, sesTo: candidateEmail,
+      title: `Human interview – ${jt}`,
+      body:  `You have been invited to a human interview for ${jt}`,
+      sesSubject: `Human Interview Invitation – ${jt}`,
+      sesBody: `You have progressed to a human interview for the position: ${jt}.\n\nYour recruiter will contact you with scheduling details.`,
+    },
+    offered: {
+      userId: seekerId, sesTo: candidateEmail,
+      title: `🎉 Job offer – ${jt}`,
+      body:  `You have received a job offer for ${jt}`,
+      sesSubject: `Job Offer – ${jt}`,
+      sesBody: `Congratulations! You have received a job offer for the position: ${jt}.\n\nPlease log in to your dashboard to view the details.`,
+    },
+    rejected: {
+      userId: seekerId, sesTo: candidateEmail,
+      title: `Application update – ${jt}`,
+      body:  `Your application for ${jt} was not progressed`,
+      sesSubject: `Application Update – ${jt}`,
+      sesBody: `Thank you for applying for: ${jt}.\n\nAfter careful consideration, we will not be progressing your application at this time.\n\nWe wish you the best in your search.`,
+    },
+    withdrawn: {
+      userId: recruiterId, sesTo: recruiterId,
+      title: `Withdrawn – ${candidateName || 'Candidate'}`,
+      body:  `${candidateName || 'Candidate'} withdrew their application for ${jt}`,
+      sesSubject: `Application Withdrawn: ${candidateName || 'Candidate'} – ${jt}`,
+      sesBody: `${candidateName || 'Candidate'} has withdrawn their application for: ${jt}.\n\nApplication ID: ${applicationId}`,
+    },
+  };
+
+  const n = NOTIF_MAP[newStatus];
+  if (!n || !n.userId) return;
+
+  await createNotification(n.userId, newStatus, applicationId, jobId, n.title, n.body);
+
+  if (SES_FROM_EMAIL && n.sesTo) {
+    ses.send(new SendEmailCommand({
+      Source: SES_FROM_EMAIL,
+      Destination: { ToAddresses: [n.sesTo] },
+      Message: { Subject: { Data: n.sesSubject }, Body: { Text: { Data: n.sesBody } } },
+    })).catch(e => console.error(`notifyStatusChange SES (${newStatus}):`, e.message));
   }
 }
 
@@ -472,6 +599,11 @@ app.post('/applications', async (req, res) => {
     }));
 
     // â”€â”€ 5. Below threshold â€” notify recruiter and return â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Always notify recruiter of new application (in-app)
+    createNotification(recruiterEmail, 'new_application', applicationId, jobId,
+      `New application \u2013 ${candidateName}`,
+      ` applied for ${jobTitle}. AI score: ${aiProfileScore}/100`
+    ).catch(() => {});
     if (aiProfileScore < scoreThreshold) {
       sendRecruiterLowScoreEmail(recruiterEmail, candidateName, jobTitle, aiProfileScore, applicationId).catch(() => {});
       return res.status(201).json({
@@ -556,6 +688,10 @@ app.post('/applications', async (req, res) => {
     // â”€â”€ 8. Send invitation email to candidate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const interviewLink = `https://d5k7p6fyxagls.cloudfront.net/interview.html?id=${interviewId}&token=${linkToken}`;
     sendCandidateInvitationEmail(candidateName, candidateEmail, interviewLink).catch(() => {});
+    createNotification(seekerId, 'interview_invited', applicationId, jobId,
+      `Interview invitation \u2013 ${jobTitle}`,
+      `You've been invited to an AI interview for ${jobTitle}`
+    ).catch(() => {});
 
     console.log(`âœ… Auto-invited ${candidateName} (score ${aiProfileScore}/100, mode: ${interviewMode})`);
 
@@ -606,6 +742,12 @@ app.patch('/applications/:applicationId/status', requireAuth, async (req, res) =
     if (!jobId || typeof jobId !== 'string') {
       return res.status(400).json({ error: 'jobId is required' });
     }
+    // Load application for notification context
+    const appItemRes = await ddb.send(new GetCommand({
+      TableName: APPLICATIONS_TABLE,
+      Key: { pk: `JOB#${jobId}`, sk: `APPLICATION#${applicationId}` },
+    }));
+    const appItem = appItemRes.Item || {};
     await ddb.send(new UpdateCommand({
       TableName: APPLICATIONS_TABLE,
       Key: { pk: `JOB#${jobId}`, sk: `APPLICATION#${applicationId}` },
@@ -613,6 +755,18 @@ app.patch('/applications/:applicationId/status', requireAuth, async (req, res) =
       ExpressionAttributeNames: { '#st': 'status' },
       ExpressionAttributeValues: { ':s': status, ':now': new Date().toISOString() },
     }));
+    // Trigger seeker or recruiter notification for status change
+    const NOTIFY_STATUSES = new Set(['shortlisted','human_interview','offered','rejected','withdrawn']);
+    if (NOTIFY_STATUSES.has(status)) {
+      notifyStatusChange(status, {
+        applicationId, jobId,
+        seekerId:      appItem.seekerId,
+        recruiterId:   appItem.recruiterId || req.recruiterEmail,
+        candidateName: appItem.candidateName,
+        candidateEmail: appItem.candidateEmail,
+        jobTitle:      appItem.jobTitle || null,
+      }).catch(() => {});
+    }
     res.json({ applicationId, status });
   } catch (error) {
     console.error('Error updating application status:', error);
@@ -1164,6 +1318,763 @@ app.post('/interview/process', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// ── Seeker auth rate limiter ────────────────────────────────────────────
+const seekerAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many requests, please try again later.' },
+});
+
+// ── Password hashing helpers (Node crypto — no external dependency) ────
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, stored) {
+  const [salt, hash] = stored.split(':');
+  if (!salt || !hash) return false;
+  const derived = crypto.scryptSync(password, salt, 64).toString('hex');
+  try {
+    return crypto.timingSafeEqual(Buffer.from(derived, 'hex'), Buffer.from(hash, 'hex'));
+  } catch {
+    return false;
+  }
+}
+
+// ── GET /public/jobs ──────────────────────────────────────────────────
+// Returns all open jobs. No authentication required.
+// Query params: search, location, employmentType
+app.get('/public/jobs', async (req, res) => {
+  try {
+    const { search, location, employmentType } = req.query;
+    const result = await ddb.send(new QueryCommand({
+      TableName: JOBS_TABLE,
+      IndexName: 'JobsByStatus',
+      KeyConditionExpression: '#st = :st',
+      ExpressionAttributeNames: { '#st': 'status' },
+      ExpressionAttributeValues: { ':st': 'open' },
+    }));
+    let jobs = result.Items || [];
+
+    if (search && typeof search === 'string' && search.trim()) {
+      const q = search.trim().toLowerCase();
+      jobs = jobs.filter(j =>
+        (j.title || '').toLowerCase().includes(q) ||
+        (j.description || '').toLowerCase().includes(q),
+      );
+    }
+    if (location && typeof location === 'string' && location.trim()) {
+      const loc = location.trim().toLowerCase();
+      jobs = jobs.filter(j => (j.location || '').toLowerCase().includes(loc));
+    }
+    if (employmentType && typeof employmentType === 'string') {
+      jobs = jobs.filter(j => j.employmentType === employmentType);
+    }
+
+    const publicJobs = jobs.map(j => ({
+      jobId: j.jobId,
+      title: j.title,
+      location: j.location,
+      employmentType: j.employmentType,
+      salaryRange: j.salaryRange,
+      requirements: j.requirements,
+      createdAt: j.createdAt,
+      // Strip internal fields
+      description: (j.description || '').substring(0, 500),
+    }));
+
+    res.json({ jobs: publicJobs });
+  } catch (error) {
+    console.error('Error listing public jobs:', error);
+    res.status(500).json({ error: 'Failed to list jobs' });
+  }
+});
+
+// ── GET /public/jobs/:jobId ───────────────────────────────────────────
+app.get('/public/jobs/:jobId', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    if (!jobId || typeof jobId !== 'string' || jobId.length > 100) {
+      return res.status(400).json({ error: 'Invalid job ID' });
+    }
+    const result = await ddb.send(new QueryCommand({
+      TableName: JOBS_TABLE,
+      IndexName: 'JobsByJobId',
+      KeyConditionExpression: 'jobId = :jid',
+      ExpressionAttributeValues: { ':jid': jobId },
+      Limit: 1,
+    }));
+    const job = result.Items && result.Items[0];
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    if (job.status !== 'open') return res.status(404).json({ error: 'Job not found' });
+
+    res.json({
+      jobId: job.jobId,
+      title: job.title,
+      description: job.description,
+      requirements: job.requirements,
+      location: job.location,
+      employmentType: job.employmentType,
+      salaryRange: job.salaryRange,
+      interviewMode: job.interviewMode,
+      createdAt: job.createdAt,
+    });
+  } catch (error) {
+    console.error('Error fetching public job:', error);
+    res.status(500).json({ error: 'Failed to fetch job' });
+  }
+});
+
+// ── POST /seeker/auth/signup ───────────────────────────────────────────
+app.post('/seeker/auth/signup', seekerAuthLimiter, async (req, res) => {
+  try {
+    const { email, password, fullName } = req.body;
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email is required' });
+    }
+    if (!password || typeof password !== 'string' || password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+    if (!fullName || typeof fullName !== 'string' || !fullName.trim()) {
+      return res.status(400).json({ error: 'Full name is required' });
+    }
+    const normalEmail = email.toLowerCase().trim();
+
+    // Check for existing user
+    const existing = await ddb.send(new QueryCommand({
+      TableName: USERS_TABLE,
+      IndexName: 'UsersByEmail',
+      KeyConditionExpression: 'email = :em',
+      ExpressionAttributeValues: { ':em': normalEmail },
+      Limit: 1,
+    }));
+    if (existing.Items && existing.Items.length > 0) {
+      return res.status(409).json({ error: 'An account with this email already exists' });
+    }
+
+    const userId = `user_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`;
+    const now = new Date().toISOString();
+    await ddb.send(new PutCommand({
+      TableName: USERS_TABLE,
+      Item: {
+        pk: `USER#${userId}`,
+        sk: 'PROFILE',
+        userId,
+        email: normalEmail,
+        passwordHash: hashPassword(password),
+        role: 'seeker',
+        fullName: fullName.trim(),
+        location: null,
+        skills: [],
+        availability: null,
+        bio: null,
+        cvS3Key: null,
+        cvUrl: null,
+        profileComplete: 20,
+        createdAt: now,
+        updatedAt: now,
+      },
+    }));
+
+    const token = jwt.sign(
+      { sub: userId, email: normalEmail, role: 'seeker' },
+      SEEKER_JWT_SECRET,
+      { algorithm: 'HS256', expiresIn: '7d' },
+    );
+    console.log(`[Seeker] Signup: ${normalEmail} (${userId})`);
+    res.status(201).json({ token, userId, email: normalEmail, fullName: fullName.trim() });
+  } catch (error) {
+    console.error('Error in seeker signup:', error);
+    res.status(500).json({ error: 'Failed to create account' });
+  }
+});
+
+// ── POST /seeker/auth/login ────────────────────────────────────────────
+app.post('/seeker/auth/login', seekerAuthLimiter, async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    const normalEmail = email.toLowerCase().trim();
+    const result = await ddb.send(new QueryCommand({
+      TableName: USERS_TABLE,
+      IndexName: 'UsersByEmail',
+      KeyConditionExpression: 'email = :em',
+      ExpressionAttributeValues: { ':em': normalEmail },
+      Limit: 1,
+    }));
+    const user = result.Items && result.Items[0];
+    if (!user || !verifyPassword(password, user.passwordHash || '')) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    const token = jwt.sign(
+      { sub: user.userId, email: normalEmail, role: 'seeker' },
+      SEEKER_JWT_SECRET,
+      { algorithm: 'HS256', expiresIn: '7d' },
+    );
+    res.json({
+      token,
+      userId: user.userId,
+      email: normalEmail,
+      fullName: user.fullName || '',
+      profileComplete: user.profileComplete || 0,
+    });
+  } catch (error) {
+    console.error('Error in seeker login:', error);
+    res.status(500).json({ error: 'Failed to log in' });
+  }
+});
+
+// ── GET /seeker/profile ────────────────────────────────────────────────
+app.get('/seeker/profile', requireSeekerAuth, async (req, res) => {
+  try {
+    const result = await ddb.send(new GetCommand({
+      TableName: USERS_TABLE,
+      Key: { pk: `USER#${req.seekerId}`, sk: 'PROFILE' },
+    }));
+    if (!result.Item) return res.status(404).json({ error: 'Profile not found' });
+    const u = result.Item;
+    res.json({
+      userId: u.userId,
+      email: u.email,
+      fullName: u.fullName,
+      location: u.location,
+      skills: u.skills || [],
+      availability: u.availability,
+      bio: u.bio,
+      cvUrl: u.cvUrl,
+      profileComplete: u.profileComplete || 0,
+      createdAt: u.createdAt,
+    });
+  } catch (error) {
+    console.error('Error fetching seeker profile:', error);
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+// ── PUT /seeker/profile ────────────────────────────────────────────────
+app.put('/seeker/profile', requireSeekerAuth, async (req, res) => {
+  try {
+    const { fullName, location, skills, availability, bio } = req.body;
+    const validAvailabilities = ['immediately', '2_weeks', '1_month', '3_months', 'not_looking'];
+
+    const cleanName = fullName ? String(fullName).trim() : null;
+    const cleanLoc  = location  ? String(location).trim()  : null;
+    const cleanSkills = Array.isArray(skills)
+      ? skills.map(s => String(s).trim()).filter(Boolean).slice(0, 30)
+      : null;
+    const cleanAvail = validAvailabilities.includes(availability) ? availability : null;
+    const cleanBio   = bio ? String(bio).trim().substring(0, 2000) : null;
+
+    const existing = await ddb.send(new GetCommand({
+      TableName: USERS_TABLE,
+      Key: { pk: `USER#${req.seekerId}`, sk: 'PROFILE' },
+    }));
+    if (!existing.Item) return res.status(404).json({ error: 'Profile not found' });
+
+    const merged = { ...existing.Item };
+    if (cleanName  !== null) merged.fullName     = cleanName;
+    if (cleanLoc   !== null) merged.location     = cleanLoc;
+    if (cleanSkills !== null) merged.skills      = cleanSkills;
+    if (cleanAvail !== null) merged.availability = cleanAvail;
+    if (cleanBio   !== null) merged.bio          = cleanBio;
+    merged.updatedAt = new Date().toISOString();
+
+    // Recalculate completion %
+    let score = 20; // base for having an account
+    if (merged.fullName)     score += 15;
+    if (merged.location)     score += 15;
+    if (merged.skills && merged.skills.length) score += 15;
+    if (merged.availability) score += 10;
+    if (merged.bio)          score += 10;
+    if (merged.cvUrl)        score += 15;
+    merged.profileComplete = Math.min(100, score);
+
+    await ddb.send(new PutCommand({ TableName: USERS_TABLE, Item: merged }));
+    res.json({ profileComplete: merged.profileComplete });
+  } catch (error) {
+    console.error('Error updating seeker profile:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// ── POST /seeker/profile/cv ────────────────────────────────────────────
+// Accepts base64-encoded file and uploads to S3 on behalf of the seeker.
+app.post('/seeker/profile/cv', requireSeekerAuth, async (req, res) => {
+  try {
+    const { base64, mimeType, filename } = req.body;
+    if (!base64 || typeof base64 !== 'string') {
+      return res.status(400).json({ error: 'base64 file data is required' });
+    }
+    const allowedTypes = ['application/pdf', 'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const safeMime = allowedTypes.includes(mimeType) ? mimeType : 'application/pdf';
+
+    const buffer = Buffer.from(base64, 'base64');
+    if (buffer.byteLength > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: 'CV file must be under 10MB' });
+    }
+
+    const ext = safeMime === 'application/pdf' ? 'pdf'
+      : safeMime === 'application/msword' ? 'doc' : 'docx';
+    const s3Key = `cvs/${req.seekerId}/${Date.now()}.${ext}`;
+
+    await s3.send(new PutObjectCommand({
+      Bucket: S3_CV_BUCKET,
+      Key: s3Key,
+      Body: buffer,
+      ContentType: safeMime,
+      ServerSideEncryption: 'AES256',
+    }));
+
+    const cvUrl = `https://${S3_CV_BUCKET}.s3.${REGION}.amazonaws.com/${s3Key}`;
+
+    // Update profile with CV URL and recalculate completion
+    const existing = await ddb.send(new GetCommand({
+      TableName: USERS_TABLE,
+      Key: { pk: `USER#${req.seekerId}`, sk: 'PROFILE' },
+    }));
+    if (existing.Item) {
+      const merged = { ...existing.Item, cvS3Key: s3Key, cvUrl, updatedAt: new Date().toISOString() };
+      let score = 20;
+      if (merged.fullName)     score += 15;
+      if (merged.location)     score += 15;
+      if (merged.skills && merged.skills.length) score += 15;
+      if (merged.availability) score += 10;
+      if (merged.bio)          score += 10;
+      if (merged.cvUrl)        score += 15;
+      merged.profileComplete = Math.min(100, score);
+      await ddb.send(new PutCommand({ TableName: USERS_TABLE, Item: merged }));
+    }
+
+    res.json({ cvUrl, s3Key });
+  } catch (error) {
+    console.error('Error uploading CV:', error);
+    res.status(500).json({ error: 'Failed to upload CV' });
+  }
+});
+
+// ── GET /seeker/applications ───────────────────────────────────────────
+app.get('/seeker/applications', requireSeekerAuth, async (req, res) => {
+  try {
+    const result = await ddb.send(new QueryCommand({
+      TableName: APPLICATIONS_TABLE,
+      IndexName: 'ApplicationsBySeeker',
+      KeyConditionExpression: 'seekerId = :sid',
+      ExpressionAttributeValues: { ':sid': req.seekerId },
+      ScanIndexForward: false,
+    }));
+    const apps = (result.Items || []).map(a => ({
+      applicationId:  a.applicationId,
+      jobId:          a.jobId,
+      candidateName:  a.candidateName,
+      status:         a.status,
+      aiProfileScore: a.aiProfileScore,
+      recommended:    a.recommended,
+      appliedAt:      a.appliedAt,
+      updatedAt:      a.updatedAt,
+    }));
+
+    // Enrich with job titles
+    const jobIds = [...new Set(apps.map(a => a.jobId).filter(Boolean))];
+    if (jobIds.length) {
+      await Promise.all(jobIds.map(async jid => {
+        try {
+          const jr = await ddb.send(new QueryCommand({
+            TableName: JOBS_TABLE,
+            IndexName: 'JobsByJobId',
+            KeyConditionExpression: 'jobId = :jid',
+            ExpressionAttributeValues: { ':jid': jid },
+            Limit: 1,
+          }));
+          const job = jr.Items && jr.Items[0];
+          if (job) {
+            apps.filter(a => a.jobId === jid).forEach(a => {
+              a.jobTitle = job.title;
+              a.jobLocation = job.location;
+              a.jobEmploymentType = job.employmentType;
+            });
+          }
+        } catch { /* skip enrichment on error */ }
+      }));
+    }
+
+    res.json({ applications: apps });
+  } catch (error) {
+    console.error('Error fetching seeker applications:', error);
+    res.status(500).json({ error: 'Failed to fetch applications' });
+  }
+});
+
+// ── GET /seeker/applications/:id ───────────────────────────────────────
+app.get('/seeker/applications/:id', requireSeekerAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || typeof id !== 'string' || id.length > 100) {
+      return res.status(400).json({ error: 'Invalid application ID' });
+    }
+    const result = await ddb.send(new QueryCommand({
+      TableName: APPLICATIONS_TABLE,
+      IndexName: 'ApplicationById',
+      KeyConditionExpression: 'applicationId = :aid',
+      ExpressionAttributeValues: { ':aid': id },
+      Limit: 1,
+    }));
+    const app = result.Items && result.Items[0];
+    if (!app) return res.status(404).json({ error: 'Application not found' });
+    if (app.seekerId !== req.seekerId) return res.status(403).json({ error: 'Forbidden' });
+
+    // Enrich with job details
+    let job = null;
+    try {
+      const jr = await ddb.send(new QueryCommand({
+        TableName: JOBS_TABLE,
+        IndexName: 'JobsByJobId',
+        KeyConditionExpression: 'jobId = :jid',
+        ExpressionAttributeValues: { ':jid': app.jobId },
+        Limit: 1,
+      }));
+      job = jr.Items && jr.Items[0];
+    } catch { /* skip enrichment on error */ }
+
+    res.json({
+      applicationId:       app.applicationId,
+      jobId:               app.jobId,
+      jobTitle:            job ? job.title : null,
+      jobLocation:         job ? job.location : null,
+      jobEmploymentType:   job ? job.employmentType : null,
+      candidateName:       app.candidateName,
+      status:              app.status,
+      aiProfileScore:      app.aiProfileScore,
+      aiProfileReasoning:  app.aiProfileReasoning,
+      recommended:         app.recommended,
+      coverLetter:         app.coverLetter,
+      appliedAt:           app.appliedAt,
+      updatedAt:           app.updatedAt,
+    });
+  } catch (error) {
+    console.error('Error fetching seeker application detail:', error);
+    res.status(500).json({ error: 'Failed to fetch application' });
+  }
+});
+
+// ── GET /notifications  (recruiter) ──────────────────────────────────
+app.get('/notifications', requireAuth, async (req, res) => {
+  try {
+    const result = await ddb.send(new QueryCommand({
+      TableName: NOTIFICATIONS_TABLE,
+      KeyConditionExpression: 'pk = :pk',
+      ExpressionAttributeValues: { ':pk': `USER#${req.recruiterEmail}` },
+      ScanIndexForward: false,
+      Limit: 50,
+    }));
+    res.json({ notifications: result.Items || [] });
+  } catch (err) {
+    console.error('GET /notifications error:', err);
+    res.status(500).json({ error: 'Failed to load notifications' });
+  }
+});
+
+// ── POST /notifications/read-all  (recruiter) ─────────────────────────
+app.post('/notifications/read-all', requireAuth, async (req, res) => {
+  try {
+    const result = await ddb.send(new QueryCommand({
+      TableName: NOTIFICATIONS_TABLE,
+      KeyConditionExpression: 'pk = :pk',
+      FilterExpression: '#r = :f',
+      ExpressionAttributeNames: { '#r': 'read' },
+      ExpressionAttributeValues: { ':pk': `USER#${req.recruiterEmail}`, ':f': false },
+    }));
+    await Promise.all((result.Items || []).map(n =>
+      ddb.send(new UpdateCommand({
+        TableName: NOTIFICATIONS_TABLE,
+        Key: { pk: n.pk, sk: n.sk },
+        UpdateExpression: 'SET #r = :t',
+        ExpressionAttributeNames: { '#r': 'read' },
+        ExpressionAttributeValues: { ':t': true },
+      }))
+    ));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /notifications/read-all error:', err);
+    res.status(500).json({ error: 'Failed to mark notifications read' });
+  }
+});
+
+// ── POST /notifications/:id/read  (recruiter) ─────────────────────────
+app.post('/notifications/:id/read', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await ddb.send(new QueryCommand({
+      TableName: NOTIFICATIONS_TABLE,
+      KeyConditionExpression: 'pk = :pk',
+      FilterExpression: 'notificationId = :nid',
+      ExpressionAttributeValues: { ':pk': `USER#${req.recruiterEmail}`, ':nid': id },
+      Limit: 1,
+    }));
+    const item = result.Items && result.Items[0];
+    if (!item) return res.status(404).json({ error: 'Not found' });
+    await ddb.send(new UpdateCommand({
+      TableName: NOTIFICATIONS_TABLE,
+      Key: { pk: item.pk, sk: item.sk },
+      UpdateExpression: 'SET #r = :t',
+      ExpressionAttributeNames: { '#r': 'read' },
+      ExpressionAttributeValues: { ':t': true },
+    }));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /notifications/:id/read error:', err);
+    res.status(500).json({ error: 'Failed to mark notification read' });
+  }
+});
+
+// ── GET /seeker/notifications ──────────────────────────────────────────
+app.get('/seeker/notifications', requireSeekerAuth, async (req, res) => {
+  try {
+    const result = await ddb.send(new QueryCommand({
+      TableName: NOTIFICATIONS_TABLE,
+      KeyConditionExpression: 'pk = :pk',
+      ExpressionAttributeValues: { ':pk': `USER#${req.seekerId}` },
+      ScanIndexForward: false,
+      Limit: 50,
+    }));
+    res.json({ notifications: result.Items || [] });
+  } catch (err) {
+    console.error('GET /seeker/notifications error:', err);
+    res.status(500).json({ error: 'Failed to load notifications' });
+  }
+});
+
+// ── POST /seeker/notifications/read-all ───────────────────────────────
+app.post('/seeker/notifications/read-all', requireSeekerAuth, async (req, res) => {
+  try {
+    const result = await ddb.send(new QueryCommand({
+      TableName: NOTIFICATIONS_TABLE,
+      KeyConditionExpression: 'pk = :pk',
+      FilterExpression: '#r = :f',
+      ExpressionAttributeNames: { '#r': 'read' },
+      ExpressionAttributeValues: { ':pk': `USER#${req.seekerId}`, ':f': false },
+    }));
+    await Promise.all((result.Items || []).map(n =>
+      ddb.send(new UpdateCommand({
+        TableName: NOTIFICATIONS_TABLE,
+        Key: { pk: n.pk, sk: n.sk },
+        UpdateExpression: 'SET #r = :t',
+        ExpressionAttributeNames: { '#r': 'read' },
+        ExpressionAttributeValues: { ':t': true },
+      }))
+    ));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /seeker/notifications/read-all error:', err);
+    res.status(500).json({ error: 'Failed to mark notifications read' });
+  }
+});
+
+// ── POST /seeker/notifications/:id/read ───────────────────────────────
+app.post('/seeker/notifications/:id/read', requireSeekerAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await ddb.send(new QueryCommand({
+      TableName: NOTIFICATIONS_TABLE,
+      KeyConditionExpression: 'pk = :pk',
+      FilterExpression: 'notificationId = :nid',
+      ExpressionAttributeValues: { ':pk': `USER#${req.seekerId}`, ':nid': id },
+      Limit: 1,
+    }));
+    const item = result.Items && result.Items[0];
+    if (!item) return res.status(404).json({ error: 'Not found' });
+    await ddb.send(new UpdateCommand({
+      TableName: NOTIFICATIONS_TABLE,
+      Key: { pk: item.pk, sk: item.sk },
+      UpdateExpression: 'SET #r = :t',
+      ExpressionAttributeNames: { '#r': 'read' },
+      ExpressionAttributeValues: { ':t': true },
+    }));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST /seeker/notifications/:id/read error:', err);
+    res.status(500).json({ error: 'Failed to mark notification read' });
+  }
+});
+
+// ── POST /seeker/applications/:id/withdraw ───────────────────────────
+app.post('/seeker/applications/:id/withdraw', requireSeekerAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const appResult = await ddb.send(new QueryCommand({
+      TableName: APPLICATIONS_TABLE,
+      IndexName: 'ApplicationById',
+      KeyConditionExpression: 'applicationId = :aid',
+      ExpressionAttributeValues: { ':aid': id },
+      Limit: 1,
+    }));
+    const app = appResult.Items && appResult.Items[0];
+    if (!app) return res.status(404).json({ error: 'Application not found' });
+    if (app.seekerId !== req.seekerId) return res.status(403).json({ error: 'Forbidden' });
+    const now = new Date().toISOString();
+    await ddb.send(new UpdateCommand({
+      TableName: APPLICATIONS_TABLE,
+      Key: { pk: app.pk, sk: app.sk },
+      UpdateExpression: 'SET #st = :s, updatedAt = :now',
+      ExpressionAttributeNames: { '#st': 'status' },
+      ExpressionAttributeValues: { ':s': 'withdrawn', ':now': now },
+    }));
+    notifyStatusChange('withdrawn', {
+      applicationId: id, jobId: app.jobId,
+      seekerId: app.seekerId, recruiterId: app.recruiterId,
+      candidateName: app.candidateName, candidateEmail: app.candidateEmail,
+      jobTitle: app.jobTitle || null,
+    }).catch(() => {});
+    res.json({ applicationId: id, status: 'withdrawn' });
+  } catch (err) {
+    console.error('POST /seeker/applications/:id/withdraw error:', err);
+    res.status(500).json({ error: 'Failed to withdraw application' });
+  }
+});
+
+// ── GET /applications/:id/messages  (recruiter) ───────────────────────
+app.get('/applications/:id/messages', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || typeof id !== 'string' || id.length > 100) return res.status(400).json({ error: 'Invalid id' });
+    const result = await ddb.send(new QueryCommand({
+      TableName: MESSAGES_TABLE,
+      KeyConditionExpression: 'pk = :pk',
+      ExpressionAttributeValues: { ':pk': `APPLICATION#${id}` },
+      ScanIndexForward: true,
+    }));
+    res.json({ messages: result.Items || [] });
+  } catch (err) {
+    console.error('GET /applications/:id/messages error:', err);
+    res.status(500).json({ error: 'Failed to load messages' });
+  }
+});
+
+// ── POST /applications/:id/messages  (recruiter) ──────────────────────
+app.post('/applications/:id/messages', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { body: msgBody, jobId } = req.body;
+    if (!id || typeof id !== 'string' || id.length > 100) return res.status(400).json({ error: 'Invalid id' });
+    if (!msgBody || typeof msgBody !== 'string' || msgBody.trim().length === 0) return res.status(400).json({ error: 'Message body required' });
+    if (msgBody.length > 3000) return res.status(400).json({ error: 'Message too long (max 3000 chars)' });
+    const now = new Date().toISOString();
+    const msgId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const message = {
+      pk: `APPLICATION#${id}`,
+      sk: `MSG#${now}#${msgId}`,
+      messageId: msgId, applicationId: id,
+      senderId: req.recruiterEmail, senderName: req.recruiterEmail.split('@')[0],
+      senderRole: 'recruiter', body: msgBody.trim(), sentAt: now,
+    };
+    await ddb.send(new PutCommand({ TableName: MESSAGES_TABLE, Item: message }));
+
+    // Notify seeker of new message
+    if (jobId) {
+      const appRes = await ddb.send(new GetCommand({
+        TableName: APPLICATIONS_TABLE,
+        Key: { pk: `JOB#${jobId}`, sk: `APPLICATION#${id}` },
+      }));
+      const appItem = appRes.Item || {};
+      if (appItem.seekerId) {
+        createNotification(appItem.seekerId, 'new_message', id, jobId,
+          `New message from recruiter`,
+          msgBody.trim().slice(0, 120) + (msgBody.length > 120 ? '…' : '')
+        ).catch(() => {});
+      }
+    }
+    res.status(201).json({ message });
+  } catch (err) {
+    console.error('POST /applications/:id/messages error:', err);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// ── GET /seeker/applications/:id/messages ─────────────────────────────
+app.get('/seeker/applications/:id/messages', requireSeekerAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || typeof id !== 'string' || id.length > 100) return res.status(400).json({ error: 'Invalid id' });
+    // Verify ownership
+    const appResult = await ddb.send(new QueryCommand({
+      TableName: APPLICATIONS_TABLE,
+      IndexName: 'ApplicationById',
+      KeyConditionExpression: 'applicationId = :aid',
+      ExpressionAttributeValues: { ':aid': id },
+      Limit: 1,
+    }));
+    const app = appResult.Items && appResult.Items[0];
+    if (!app) return res.status(404).json({ error: 'Application not found' });
+    if (app.seekerId !== req.seekerId) return res.status(403).json({ error: 'Forbidden' });
+    const result = await ddb.send(new QueryCommand({
+      TableName: MESSAGES_TABLE,
+      KeyConditionExpression: 'pk = :pk',
+      ExpressionAttributeValues: { ':pk': `APPLICATION#${id}` },
+      ScanIndexForward: true,
+    }));
+    res.json({ messages: result.Items || [] });
+  } catch (err) {
+    console.error('GET /seeker/applications/:id/messages error:', err);
+    res.status(500).json({ error: 'Failed to load messages' });
+  }
+});
+
+// ── POST /seeker/applications/:id/messages ────────────────────────────
+app.post('/seeker/applications/:id/messages', requireSeekerAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { body: msgBody } = req.body;
+    if (!id || typeof id !== 'string' || id.length > 100) return res.status(400).json({ error: 'Invalid id' });
+    if (!msgBody || typeof msgBody !== 'string' || msgBody.trim().length === 0) return res.status(400).json({ error: 'Message body required' });
+    if (msgBody.length > 3000) return res.status(400).json({ error: 'Message too long (max 3000 chars)' });
+    // Verify ownership
+    const appResult = await ddb.send(new QueryCommand({
+      TableName: APPLICATIONS_TABLE,
+      IndexName: 'ApplicationById',
+      KeyConditionExpression: 'applicationId = :aid',
+      ExpressionAttributeValues: { ':aid': id },
+      Limit: 1,
+    }));
+    const app = appResult.Items && appResult.Items[0];
+    if (!app) return res.status(404).json({ error: 'Application not found' });
+    if (app.seekerId !== req.seekerId) return res.status(403).json({ error: 'Forbidden' });
+    const profile = await ddb.send(new GetCommand({
+      TableName: USERS_TABLE,
+      Key: { pk: `USER#${req.seekerId}`, sk: 'PROFILE' },
+    }));
+    const senderName = (profile.Item && profile.Item.fullName) || req.seekerEmail.split('@')[0];
+
+    const now = new Date().toISOString();
+    const msgId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const message = {
+      pk: `APPLICATION#${id}`,
+      sk: `MSG#${now}#${msgId}`,
+      messageId: msgId, applicationId: id,
+      senderId: req.seekerId, senderName,
+      senderRole: 'seeker', body: msgBody.trim(), sentAt: now,
+    };
+    await ddb.send(new PutCommand({ TableName: MESSAGES_TABLE, Item: message }));
+
+    // Notify recruiter of new message
+    if (app.recruiterId) {
+      createNotification(app.recruiterId, 'new_message', id, app.jobId,
+        `New message from ${senderName}`,
+        msgBody.trim().slice(0, 120) + (msgBody.length > 120 ? '...' : '')
+      ).catch(() => {});
+    }
+    res.status(201).json({ message });
+  } catch (err) {
+    console.error('POST /seeker/applications/:id/messages error:', err);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+
 // Load HTTPS certificate and key
 const certPath = path.join(__dirname, '../certs/server.crt');
 const keyPath = path.join(__dirname, '../certs/server.key');

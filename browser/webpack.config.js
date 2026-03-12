@@ -42,6 +42,36 @@ module.exports = {
       filename: 'result.html',
       chunks: [], // Standalone candidate thank-you page
     }),
+    new HtmlWebpackPlugin({
+      template: './src/jobs.html',
+      filename: 'jobs.html',
+      chunks: [],
+    }),
+    new HtmlWebpackPlugin({
+      template: './src/job-detail.html',
+      filename: 'job-detail.html',
+      chunks: [],
+    }),
+    new HtmlWebpackPlugin({
+      template: './src/seeker-login.html',
+      filename: 'seeker-login.html',
+      chunks: [],
+    }),
+    new HtmlWebpackPlugin({
+      template: './src/seeker-apply.html',
+      filename: 'seeker-apply.html',
+      chunks: [],
+    }),
+    new HtmlWebpackPlugin({
+      template: './src/seeker-applications.html',
+      filename: 'seeker-applications.html',
+      chunks: [],
+    }),
+    new HtmlWebpackPlugin({
+      template: './src/seeker-profile.html',
+      filename: 'seeker-profile.html',
+      chunks: [],
+    }),
     new webpack.ProvidePlugin({
       Buffer: ['buffer', 'Buffer'],
       process: 'process/browser',

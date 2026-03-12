@@ -24,5 +24,8 @@ Thumbs.db
 *.pem
 *.key
 
+# pre-commit
+.secrets.baseline
+
 # dependencies
 node_modules/
