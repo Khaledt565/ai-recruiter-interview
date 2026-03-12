@@ -574,6 +574,92 @@ app.post('/applications', async (req, res) => {
   }
 });
 
+// ── GET /applications ──────────────────────────────────────────────────
+app.get('/applications', requireAuth, async (req, res) => {
+  try {
+    const result = await ddb.send(new QueryCommand({
+      TableName: APPLICATIONS_TABLE,
+      IndexName: 'ApplicationsByRecruiter',
+      KeyConditionExpression: 'recruiterId = :rid',
+      ExpressionAttributeValues: { ':rid': req.recruiterEmail },
+    }));
+    res.json({ applications: result.Items || [] });
+  } catch (error) {
+    console.error('Error listing applications:', error);
+    res.status(500).json({ error: 'Failed to list applications' });
+  }
+});
+
+// ── PATCH /applications/:applicationId/status ──────────────────────────
+const VALID_PIPELINE_STATUSES = [
+  'applied', 'interview_invited', 'ai_interview_complete', 'recommended',
+  'shortlisted', 'human_interview', 'offered', 'hired', 'rejected',
+];
+
+app.patch('/applications/:applicationId/status', requireAuth, async (req, res) => {
+  try {
+    const { applicationId } = req.params;
+    const { status, jobId } = req.body;
+    if (!status || !VALID_PIPELINE_STATUSES.includes(status)) {
+      return res.status(400).json({ error: 'Invalid or missing status' });
+    }
+    if (!jobId || typeof jobId !== 'string') {
+      return res.status(400).json({ error: 'jobId is required' });
+    }
+    await ddb.send(new UpdateCommand({
+      TableName: APPLICATIONS_TABLE,
+      Key: { pk: `JOB#${jobId}`, sk: `APPLICATION#${applicationId}` },
+      UpdateExpression: 'SET #st = :s, updatedAt = :now',
+      ExpressionAttributeNames: { '#st': 'status' },
+      ExpressionAttributeValues: { ':s': status, ':now': new Date().toISOString() },
+    }));
+    res.json({ applicationId, status });
+  } catch (error) {
+    console.error('Error updating application status:', error);
+    res.status(500).json({ error: 'Failed to update application status' });
+  }
+});
+
+// ── GET /applications/:applicationId/report ────────────────────────────
+app.get('/applications/:applicationId/report', requireAuth, async (req, res) => {
+  try {
+    const { applicationId } = req.params;
+    const { jobId } = req.query;
+    if (!jobId || typeof jobId !== 'string') {
+      return res.status(400).json({ error: 'jobId query parameter is required' });
+    }
+    const appRes = await ddb.send(new GetCommand({
+      TableName: APPLICATIONS_TABLE,
+      Key: { pk: `JOB#${jobId}`, sk: `APPLICATION#${applicationId}` },
+    }));
+    if (!appRes.Item) return res.status(404).json({ error: 'Application not found' });
+    const application = appRes.Item;
+
+    const reportRes = await ddb.send(new QueryCommand({
+      TableName: INTERVIEW_REPORTS_TABLE,
+      IndexName: 'ReportByApplication',
+      KeyConditionExpression: 'applicationId = :aid',
+      ExpressionAttributeValues: { ':aid': applicationId },
+      Limit: 1,
+    }));
+    const report = (reportRes.Items && reportRes.Items[0]) || null;
+
+    let transcript = null;
+    const interviewId = report ? report.interviewId : null;
+    if (interviewId) {
+      const histRes = await ddb.send(new GetCommand({
+        TableName: SESSION_TABLE,
+        Key: { pk: `INTERVIEW#${interviewId}`, sk: 'HISTORY' },
+      }));
+      transcript = histRes.Item ? (histRes.Item.history || null) : null;
+    }
+    res.json({ application, report, transcript });
+  } catch (error) {
+    console.error('Error fetching application report:', error);
+    res.status(500).json({ error: 'Failed to fetch application report' });
+  }
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({
