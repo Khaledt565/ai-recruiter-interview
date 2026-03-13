@@ -329,6 +329,11 @@
     .rich-editor { padding: 12px 14px; min-height: 130px; font-size: 14px; line-height: 1.6; color: var(--text); outline: none; background: #fff; }
     .rich-editor.empty::before { content: attr(data-placeholder); color: #9ca3af; pointer-events: none; }
     .rich-editor p { margin: 0 0 8px; } .rich-editor ul, .rich-editor ol { padding-left: 20px; margin: 0 0 8px; }
+    .jd-upload-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+    .jd-upload-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; font-size: 12.5px; font-weight: 600; color: var(--accent); background: #ede9fe; border: 1px solid #c4b5fd; border-radius: 7px; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+    .jd-upload-btn:hover { background: #ddd6fe; border-color: var(--accent); }
+    .jd-upload-status { font-size: 12.5px; color: var(--muted); }
+    .rich-toolbar-wrap.jd-drag-over { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
     /* Sliders */
     .threshold-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
     .threshold-label { font-size: 13px; font-weight: 600; color: var(--text); }
@@ -633,6 +638,11 @@
                     <button type="button" class="rt-btn" onmousedown="event.preventDefault();rtCmd('removeFormat')" title="Clear formatting">&#10006; Clear</button>
                   </div>
                   <div class="rich-editor empty" id="jobDescEditor" contenteditable="true" data-placeholder="Describe the role, responsibilities, and ideal candidate&#8230;"></div>
+                </div>
+                <div class="jd-upload-row">
+                  <input type="file" id="jdFileInput" accept=".pdf,.docx,.txt" style="display:none;">
+                  <label class="jd-upload-btn" for="jdFileInput">&#128206; Upload PDF / DOCX / TXT</label>
+                  <span class="jd-upload-status" id="jdUploadStatus">or drag &amp; drop a file onto the editor above</span>
                 </div>
               </div>
               <div class="form-group">
@@ -1967,6 +1977,90 @@
     ed.addEventListener('blur', checkEmpty);
     checkEmpty();
   }
+
+  // ── Job Description PDF/DOCX/TXT upload ─────────────────────────────────────
+  (function setupJobDescUpload() {
+    var fileInput = document.getElementById('jdFileInput');
+    var status    = document.getElementById('jdUploadStatus');
+    var wrap      = document.querySelector('#panel-jobs .rich-toolbar-wrap');
+    var ed        = document.getElementById('jobDescEditor');
+    if (!fileInput || !ed) return;
+
+    function setStatus(msg, ok) {
+      status.textContent = msg;
+      status.style.color = ok === true ? '#10b981' : ok === false ? '#dc2626' : 'var(--muted)';
+    }
+
+    function applyText(text, filename) {
+      var lines = text.split(/\r?\n/).map(function(l) { return l.trim(); });
+      ed.innerHTML = lines.map(function(l) { return l ? '<p>' + l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</p>' : ''; }).filter(Boolean).join('');
+      ed.classList.remove('empty');
+    }
+
+    function handleFile(file) {
+      if (!file) return;
+      var name = file.name.toLowerCase();
+      if (name.endsWith('.pdf')) {
+        setStatus('Extracting text from PDF…');
+        if (typeof window.pdfjsLib === 'undefined') { setStatus('PDF library not loaded yet — please wait and try again.', false); return; }
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          window.pdfjsLib.getDocument({ data: new Uint8Array(e.target.result) }).promise
+            .then(function(pdf) {
+              var pages = [];
+              for (var i = 1; i <= pdf.numPages; i++) pages.push(i);
+              return Promise.all(pages.map(function(n) {
+                return pdf.getPage(n).then(function(pg) {
+                  return pg.getTextContent().then(function(tc) {
+                    return tc.items.map(function(item) { return item.str; }).join(' ');
+                  });
+                });
+              })).then(function(texts) {
+                applyText(texts.join('\n\n'), file.name);
+                setStatus('\u2705 ' + pdf.numPages + ' page' + (pdf.numPages !== 1 ? 's' : '') + ' imported from ' + file.name, true);
+              });
+            })
+            .catch(function() { setStatus('Failed to extract PDF. The file may be image-based.', false); });
+        };
+        reader.onerror = function() { setStatus('Failed to read file.', false); };
+        reader.readAsArrayBuffer(file);
+      } else if (name.endsWith('.docx')) {
+        setStatus('Extracting text from Word document…');
+        if (typeof window.mammoth === 'undefined') { setStatus('Word library not loaded yet — please wait and try again.', false); return; }
+        var reader2 = new FileReader();
+        reader2.onload = function(e) {
+          window.mammoth.extractRawText({ arrayBuffer: e.target.result })
+            .then(function(result) { applyText(result.value, file.name); setStatus('\u2705 Imported from ' + file.name, true); })
+            .catch(function() { setStatus('Failed to extract Word document text.', false); });
+        };
+        reader2.onerror = function() { setStatus('Failed to read file.', false); };
+        reader2.readAsArrayBuffer(file);
+      } else if (name.endsWith('.txt') || (file.type && file.type.startsWith('text/'))) {
+        setStatus('Reading text file…');
+        var reader3 = new FileReader();
+        reader3.onload = function(e) { applyText(e.target.result, file.name); setStatus('\u2705 Imported from ' + file.name, true); };
+        reader3.onerror = function() { setStatus('Failed to read file.', false); };
+        reader3.readAsText(file);
+      } else {
+        setStatus('Unsupported file type. Please use PDF, DOCX, or TXT.', false);
+      }
+    }
+
+    fileInput.addEventListener('change', function() { handleFile(fileInput.files && fileInput.files[0]); fileInput.value = ''; });
+
+    if (wrap) {
+      ['dragenter','dragover'].forEach(function(ev) {
+        wrap.addEventListener(ev, function(e) { e.preventDefault(); e.stopPropagation(); wrap.classList.add('jd-drag-over'); });
+      });
+      wrap.addEventListener('dragleave', function(e) { if (!wrap.contains(e.relatedTarget)) wrap.classList.remove('jd-drag-over'); });
+      wrap.addEventListener('drop', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        wrap.classList.remove('jd-drag-over');
+        var file = e.dataTransfer.files && e.dataTransfer.files[0];
+        handleFile(file);
+      });
+    }
+  })();
 
   function rtCmd(cmd) {
     document.getElementById('jobDescEditor').focus();
