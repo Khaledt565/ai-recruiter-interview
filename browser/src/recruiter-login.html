@@ -149,6 +149,21 @@
             padding: 0;
             text-decoration: underline;
         }
+        .forgot-link {
+            display: block;
+            text-align: right;
+            font-size: 12.5px;
+            color: #667eea;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: -8px;
+            margin-bottom: 16px;
+            background: none;
+            border: none;
+            padding: 0;
+            text-decoration: none;
+        }
+        .forgot-link:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -172,6 +187,7 @@
 
                 <label for="loginPassword">Password</label>
                 <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password">
+                <button type="button" class="forgot-link" onclick="showForgotPanel()">Forgot password?</button>
 
                 <button type="submit" id="loginBtn">Sign In</button>
             </form>
@@ -205,6 +221,34 @@
             </form>
             <div class="message" id="confirmMsg"></div>
             <button class="back-link" onclick="backToRegister()">← Use a different email</button>
+        </div>
+
+        <!-- Forgot password panel -->
+        <div class="panel" id="forgotPanel">
+            <p class="hint">Enter your email address and we’ll send you a code to reset your password.</p>
+            <form id="forgotForm">
+                <label for="forgotEmail">Email address</label>
+                <input type="email" id="forgotEmail" placeholder="recruiter@company.com" required autocomplete="email">
+                <button type="submit" id="forgotBtn">Send reset code</button>
+            </form>
+            <div class="message" id="forgotMsg"></div>
+            <button class="back-link" onclick="hideForgotPanel()">← Back to sign in</button>
+        </div>
+
+        <!-- Reset password panel (enter code + new password) -->
+        <div class="panel" id="resetPanel">
+            <p class="hint">Enter the 6-digit code sent to <strong id="resetEmailDisplay"></strong> and choose a new password.</p>
+            <form id="resetForm">
+                <label for="resetCode">Verification code</label>
+                <input type="text" id="resetCode" placeholder="123456" maxlength="6" pattern="\d{6}" inputmode="numeric" required autocomplete="one-time-code">
+                <label for="resetNewPassword">New password <span style="font-weight:400;color:#6c757d">(min 8 characters)</span></label>
+                <input type="password" id="resetNewPassword" placeholder="••••••••" required autocomplete="new-password" minlength="8">
+                <label for="resetConfirmPassword">Confirm new password</label>
+                <input type="password" id="resetConfirmPassword" placeholder="••••••••" required autocomplete="new-password">
+                <button type="submit" id="resetBtn">Set new password</button>
+            </form>
+            <div class="message" id="resetMsg"></div>
+            <button class="back-link" onclick="hideForgotPanel()">← Back to sign in</button>
         </div>
     </div>
 
@@ -244,6 +288,22 @@
         function backToRegister() {
             document.getElementById('mainTabs').style.display = '';
             switchTab('register');
+        }
+
+        function showForgotPanel() {
+            document.getElementById('mainTabs').style.display = 'none';
+            ['loginPanel','registerPanel','confirmPanel','resetPanel'].forEach(function(id) {
+                document.getElementById(id).classList.remove('active');
+            });
+            document.getElementById('forgotPanel').classList.add('active');
+        }
+
+        function hideForgotPanel() {
+            document.getElementById('mainTabs').style.display = '';
+            ['forgotPanel','resetPanel'].forEach(function(id) {
+                document.getElementById(id).classList.remove('active');
+            });
+            switchTab('login');
         }
 
         function showMsg(id, text, type) {
@@ -359,6 +419,68 @@
             } finally {
                 btn.disabled = false;
                 btn.textContent = 'Verify Email';
+            }
+        });
+
+        // ── Forgot Password ────────────────────────────────────────────────────────────
+        var forgotEmail = '';
+
+        document.getElementById('forgotForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('forgotBtn');
+            forgotEmail = document.getElementById('forgotEmail').value.trim();
+            btn.disabled = true;
+            btn.textContent = 'Sending…';
+            try {
+                await cognitoRequest('ForgotPassword', {
+                    ClientId: CLIENT_ID,
+                    Username: forgotEmail,
+                });
+                showMsg('forgotMsg', '✅ Code sent! Check your email.', 'success');
+                // Move to reset panel after short delay
+                setTimeout(() => {
+                    document.getElementById('resetEmailDisplay').textContent = forgotEmail;
+                    document.getElementById('forgotPanel').classList.remove('active');
+                    document.getElementById('resetPanel').classList.add('active');
+                }, 1000);
+            } catch (err) {
+                showMsg('forgotMsg', '❌ ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Send reset code';
+            }
+        });
+
+        document.getElementById('resetForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('resetBtn');
+            const code = document.getElementById('resetCode').value.trim();
+            const newPass = document.getElementById('resetNewPassword').value;
+            const confirmPass = document.getElementById('resetConfirmPassword').value;
+            if (newPass !== confirmPass) {
+                showMsg('resetMsg', '❌ Passwords do not match.', 'error');
+                return;
+            }
+            btn.disabled = true;
+            btn.textContent = 'Updating…';
+            try {
+                await cognitoRequest('ConfirmForgotPassword', {
+                    ClientId: CLIENT_ID,
+                    Username: forgotEmail,
+                    ConfirmationCode: code,
+                    Password: newPass,
+                });
+                showMsg('resetMsg', '✅ Password updated! Signing you in…', 'success');
+                setTimeout(() => {
+                    document.getElementById('loginEmail').value = forgotEmail;
+                    showMsg('loginMsg', '✅ Password reset! Enter your new password to continue.', 'success');
+                    hideForgotPanel();
+                }, 1200);
+            } catch (err) {
+                showMsg('resetMsg', '❌ ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Set new password';
             }
         });
     </script>

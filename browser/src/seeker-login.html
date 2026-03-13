@@ -52,6 +52,8 @@
     .link-row a:hover { text-decoration: underline; }
 
     .divider-bar { text-align: center; margin: 14px 0 0; font-size: 12px; color: #9ca3af; }
+    .forgot-link { display: block; text-align: right; font-size: 12.5px; color: var(--accent); font-weight: 600; cursor: pointer; margin-top: -8px; margin-bottom: 14px; text-decoration: none; }
+    .forgot-link:hover { text-decoration: underline; }
     .back-link { display: block; text-align: center; color: rgba(255,255,255,0.45); font-size: 13px; text-decoration: none; margin-top: 20px; }
     .back-link:hover { color: rgba(255,255,255,0.7); }
 
@@ -94,7 +96,24 @@
       </div>
       <button type="submit" class="submit-btn" id="signinBtn">Sign in</button>
     </form>
+    <a class="forgot-link" onclick="switchTab('forgot')">Forgot password?</a>
     <div class="link-row">Don't have an account? <a onclick="switchTab('signup')">Create one</a></div>
+  </div>
+
+  <!-- Forgot password form -->
+  <div class="form-section" id="sectionForgot">
+    <p class="form-title">Reset your password</p>
+    <p class="form-sub">Enter your email and we'll send you a reset link.</p>
+    <div class="alert alert-error" id="forgotError"></div>
+    <div class="alert alert-success" id="forgotSuccess"></div>
+    <form id="forgotForm" onsubmit="doForgot(event)">
+      <div class="form-group">
+        <label class="form-label" for="forgotEmail">Email address</label>
+        <input type="email" id="forgotEmail" class="form-input" placeholder="you@example.com" autocomplete="email" required />
+      </div>
+      <button type="submit" class="submit-btn" id="forgotBtn">Send reset link</button>
+    </form>
+    <div class="link-row" style="margin-top:16px"><a onclick="switchTab('signin')">← Back to sign in</a></div>
   </div>
 
   <!-- Sign up form -->
@@ -145,6 +164,9 @@
     document.getElementById('tabSignUp').classList.toggle('active', tab === 'signup');
     document.getElementById('sectionSignin').classList.toggle('active', tab === 'signin');
     document.getElementById('sectionSignup').classList.toggle('active', tab === 'signup');
+    document.getElementById('sectionForgot').classList.toggle('active', tab === 'forgot');
+    // Hide tabs row when on forgot screen
+    document.querySelector('.tabs').style.display = tab === 'forgot' ? 'none' : '';
   }
 
   function setLoading(btnId, loading) {
@@ -228,6 +250,37 @@
         window.location.replace('seeker-profile.html?new=1' + (redirectUrl !== 'seeker-profile.html' ? '&then=' + encodeURIComponent(redirectUrl) : ''));
       })
       .catch(function() { setLoading('signupBtn', false); showError('signupError', 'Network error — please try again'); });
+  }
+
+  function doForgot(e) {
+    e.preventDefault();
+    hideError('forgotError');
+    document.getElementById('forgotSuccess').classList.remove('visible');
+    var email = document.getElementById('forgotEmail').value.trim();
+    if (!email) { showError('forgotError', 'Please enter your email address'); return; }
+    var btn = document.getElementById('forgotBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner"></div>';
+    fetch(BACKEND_URL + '/seeker/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email }),
+    })
+      .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+      .then(function(res) {
+        btn.disabled = false;
+        btn.innerHTML = 'Send reset link';
+        if (!res.ok) { showError('forgotError', res.data.error || 'Request failed'); return; }
+        var el = document.getElementById('forgotSuccess');
+        el.textContent = '✅ Check your inbox — a reset link has been sent if this email is registered.';
+        el.classList.add('visible');
+        document.getElementById('forgotForm').style.display = 'none';
+      })
+      .catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = 'Send reset link';
+        showError('forgotError', 'Network error — please try again');
+      });
   }
 </script>
 </body>

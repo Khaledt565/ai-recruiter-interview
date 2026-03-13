@@ -58,6 +58,11 @@ module.exports = {
       chunks: [],
     }),
     new HtmlWebpackPlugin({
+      template: './src/seeker-reset-password.html',
+      filename: 'seeker-reset-password.html',
+      chunks: [],
+    }),
+    new HtmlWebpackPlugin({
       template: './src/seeker-apply.html',
       filename: 'seeker-apply.html',
       chunks: [],
