@@ -66,6 +66,11 @@
     /* ── CV text extraction ── */
     .cv-text-section { display: none; }
     .cv-text-section.visible { display: block; }
+    .cv-extract-status { display: flex; align-items: center; gap: 9px; padding: 10px 14px; border-radius: 9px; font-size: 12.5px; font-weight: 500; margin-top: 12px; }
+    .cv-extract-status.ready  { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+    .cv-extract-status.working { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+    .cv-extract-status.warn   { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+    .cv-extract-status.error  { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
 
     /* ── Submit ── */
     .submit-btn { width: 100%; padding: 13px; background: var(--accent); color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; transition: background 0.15s; display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -189,13 +194,10 @@
         </div>
       </div>
 
-      <!-- CV text for AI (extracted or pasted) -->
+      <!-- CV text for AI (auto-extracted — hidden from user) -->
       <div class="cv-text-section" id="cvTextSection">
-        <div style="margin-top:16px">
-          <label class="form-label" for="cvText">CV text <span style="color:var(--muted);font-weight:400">(for AI matching — paste or extract from your CV)</span></label>
-          <textarea id="cvText" class="form-input" rows="7" placeholder="Paste the text content of your CV here for AI profile analysis…" maxlength="20000"></textarea>
-          <p style="font-size:11.5px;color:var(--muted);margin-top:4px">The AI will use this text to assess your fit for the role. Max 20,000 characters.</p>
-        </div>
+        <div id="cvExtractStatus"></div>
+        <textarea id="cvText" maxlength="20000" style="display:none;"></textarea>
       </div>
     </div>
 
@@ -242,7 +244,6 @@
   var BACKEND_URL = backendProtocol + '://' + backendHost;
 
   var profileCvUrl = null;
-  var uploadedCvText = null;
 
   function esc(s) { return String(s || '').replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function empLabel(t) { return t === 'full-time' ? 'Full-time' : t === 'part-time' ? 'Part-time' : t === 'contract' ? 'Contract' : t || ''; }
@@ -285,9 +286,12 @@
       if (profileCvUrl) {
         document.getElementById('cvExisting').style.display = '';
         document.getElementById('cvTextSection').classList.add('visible');
+        setCvStatus('working', '⏳ Extracting text from your CV on file…');
+        fetchAndExtractCv(profileCvUrl);
       } else {
         document.getElementById('cvRequired').style.display = '';
         document.getElementById('cvTextSection').classList.add('visible');
+        setCvStatus('warn', '📤 Please upload your CV above — the text will be extracted automatically for AI matching.');
       }
     })
     .catch(function() {
@@ -295,7 +299,68 @@
       document.getElementById('candidateName').value  = localStorage.getItem('seeker_name')  || '';
       document.getElementById('cvRequired').style.display = '';
       document.getElementById('cvTextSection').classList.add('visible');
+      setCvStatus('warn', '📤 Please upload your CV above — the text will be extracted automatically for AI matching.');
     });
+
+  // ── CV text helpers ─────────────────────────────────────────────────────
+  function setCvStatus(type, msg) {
+    var el = document.getElementById('cvExtractStatus');
+    el.className = 'cv-extract-status ' + type;
+    el.textContent = msg;
+  }
+
+  function applyExtractedText(text, label) {
+    var clean = text.trim();
+    document.getElementById('cvText').value = clean;
+    var words = clean.split(/\s+/).filter(Boolean).length;
+    setCvStatus('ready', '\u2705 CV text extracted (' + words + ' words) \u2014 AI matching ready' + (label ? ' — ' + label : ''));
+  }
+
+  function showManualFallback() {
+    var ta = document.getElementById('cvText');
+    ta.style.display = '';
+    ta.placeholder = 'Paste your CV text here so the AI can assess your fit\u2026';
+    ta.rows = 7;
+    ta.className = 'form-input';
+  }
+
+  function extractFromArrayBuffer(buf, filename) {
+    var name = (filename || '').toLowerCase();
+    if (name.endsWith('.pdf')) {
+      if (typeof window.pdfjsLib === 'undefined') { setCvStatus('error', '\u274C PDF library not loaded \u2014 please refresh and try again.'); return; }
+      window.pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise
+        .then(function(pdf) {
+          var nums = []; for (var i = 1; i <= pdf.numPages; i++) nums.push(i);
+          return Promise.all(nums.map(function(n) {
+            return pdf.getPage(n).then(function(pg) {
+              return pg.getTextContent().then(function(tc) { return tc.items.map(function(it) { return it.str; }).join(' '); });
+            });
+          })).then(function(texts) { applyExtractedText(texts.join('\n\n'), filename); });
+        })
+        .catch(function() { setCvStatus('error', '\u274C Could not extract text from this PDF \u2014 it may be image-based.'); showManualFallback(); });
+    } else if (name.endsWith('.docx')) {
+      if (typeof window.mammoth === 'undefined') { setCvStatus('error', '\u274C Word library not loaded \u2014 please refresh and try again.'); return; }
+      window.mammoth.extractRawText({ arrayBuffer: buf })
+        .then(function(r) { applyExtractedText(r.value, filename); })
+        .catch(function() { setCvStatus('error', '\u274C Could not extract text from Word document.'); showManualFallback(); });
+    } else {
+      try { applyExtractedText(new TextDecoder().decode(new Uint8Array(buf)), filename); }
+      catch(e) { setCvStatus('error', '\u274C Could not read file.'); showManualFallback(); }
+    }
+  }
+
+  function fetchAndExtractCv(url) {
+    fetch(url)
+      .then(function(r) { if (!r.ok) throw new Error(); return r.arrayBuffer(); })
+      .then(function(buf) {
+        var filename = url.split('?')[0].split('/').pop() || 'cv.pdf';
+        extractFromArrayBuffer(buf, filename);
+      })
+      .catch(function() {
+        setCvStatus('warn', '\u26A0\uFE0F Could not auto-extract your stored CV. Please re-upload your CV below.');
+        document.getElementById('cvRequired').style.display = '';
+      });
+  }
 
   // ── Inline CV upload (for applicants without a CV on file) ───────
   function handleCvUpload(file) {
@@ -303,11 +368,21 @@
     var allowed = ['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
     if (!allowed.includes(file.type)) { showError('Please upload a PDF or Word document'); return; }
     if (file.size > 10 * 1024 * 1024) { showError('File must be under 10 MB'); return; }
-    // Read file as base64 and upload to get cvUrl, then fill cvText
+
+    document.getElementById('cvUploadLabel').textContent = 'Reading "' + file.name + '"…';
+    setCvStatus('working', '⏳ Extracting text from ' + file.name + '…');
+
     var reader = new FileReader();
-    document.getElementById('cvUploadLabel').textContent = 'Uploading "' + file.name + '"…';
     reader.onload = function(e) {
-      var base64 = e.target.result.split(',')[1];
+      var buf = e.target.result;
+
+      // 1. Extract text immediately for AI matching
+      extractFromArrayBuffer(buf, file.name);
+
+      // 2. Upload to profile in background
+      var bytes = new Uint8Array(buf), bin = '';
+      for (var k = 0; k < bytes.byteLength; k++) bin += String.fromCharCode(bytes[k]);
+      var base64 = btoa(bin);
       fetch(BACKEND_URL + '/seeker/profile/cv', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -323,7 +398,8 @@
         })
         .catch(function() { showError('CV upload failed — please try again'); });
     };
-    reader.readAsDataURL(file);
+    reader.onerror = function() { setCvStatus('error', '❌ Failed to read the file.'); };
+    reader.readAsArrayBuffer(file);
   }
 
   // ── Submit ────────────────────────────────────────────────────────
@@ -336,7 +412,7 @@
 
     if (!name)  { showError('Please enter your full name'); return; }
     if (!email || !email.includes('@')) { showError('Please enter a valid email address'); return; }
-    if (!cvText || cvText.length < 50) { showError('Please paste the text content of your CV (minimum 50 characters) so our AI can assess your fit'); return; }
+    if (!cvText || cvText.length < 50) { showError('CV text could not be extracted or is too short. Please re-upload your CV or type at least 50 characters in the CV text field.'); showManualFallback(); document.getElementById('cvText').focus(); return; }
 
     var btn = document.getElementById('submitBtn');
     btn.disabled = true;
@@ -375,5 +451,11 @@
       });
   }
 </script>
+
+<!-- PDF.js for CV text extraction -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if (typeof pdfjsLib !== 'undefined') { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; window.pdfjsLib = pdfjsLib; }</script>
+<!-- Mammoth.js for DOCX text extraction -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 </body>
 </html>
