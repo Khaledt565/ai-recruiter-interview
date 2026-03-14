@@ -8,11 +8,16 @@ import {
   SESSION_TABLE, INTERVIEW_REPORTS_TABLE, MESSAGES_TABLE,
   FRONTEND_URL,
 } from '../utils/clients.js';
-import { requireAuth, generateLinkToken } from '../utils/auth.js';
+import { requireAuth, requireSeekerAuth, requireAnyAuth, generateLinkToken } from '../utils/auth.js';
 import { ddbSend, scoreWithFallback } from '../utils/aws-wrappers.js';
 import { sendCandidateInvitationEmail, sendRecruiterLowScoreEmail } from '../utils/email.js';
 import { createNotification, notifyStatusChange } from '../utils/notifications.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { validate } from '../middleware/validate.js';
+import {
+  createApplicationSchema, createMessageSchema, updateStatusSchema, ALLOWED_TRANSITIONS,
+} from '../utils/schemas.js';
+import { ERROR_CODES } from '../utils/errors.js';
 
 const router = Router();
 
@@ -207,20 +212,34 @@ router.get('/', requireAuth, asyncHandler(async (req, res) => {
 }));
 
 // ── PATCH /applications/:applicationId/status ──────────────────────────────────
-router.patch('/:applicationId/status', requireAuth, asyncHandler(async (req, res) => {
+router.patch('/:applicationId/status', requireAuth, validate(updateStatusSchema), asyncHandler(async (req, res) => {
     const { applicationId } = req.params;
-    const { status, jobId } = req.body;
-    if (!status || !VALID_PIPELINE_STATUSES.includes(status)) {
-      return res.status(400).json({ error: 'Invalid or missing status' });
-    }
-    if (!jobId || typeof jobId !== 'string') {
-      return res.status(400).json({ error: 'jobId is required' });
-    }
+    const { status, jobId } = req.validated;
+
     const appItemRes = await ddbSend(new GetCommand({
       TableName: APPLICATIONS_TABLE,
       Key: { pk: `JOB#${jobId}`, sk: `APPLICATION#${applicationId}` },
     }));
-    const appItem = appItemRes.Item || {};
+    if (!appItemRes.Item) {
+      return res.status(404).json({
+        code: ERROR_CODES.APPLICATION_NOT_FOUND,
+        errors: [{ field: 'applicationId', message: 'Application not found' }],
+      });
+    }
+    const appItem = appItemRes.Item;
+
+    // Status transition validation
+    const currentStatus = appItem.status;
+    const allowed = ALLOWED_TRANSITIONS[currentStatus] || [];
+    if (!allowed.includes(status)) {
+      return res.status(422).json({
+        code: ERROR_CODES.INVALID_STATUS_TRANSITION,
+        errors: [{
+          field:   'status',
+          message: `Cannot transition from '${currentStatus}' to '${status}'`,
+        }],
+      });
+    }
     await ddbSend(new UpdateCommand({
       TableName: APPLICATIONS_TABLE,
       Key: { pk: `JOB#${jobId}`, sk: `APPLICATION#${applicationId}` },
@@ -278,9 +297,23 @@ router.get('/:applicationId/report', requireAuth, asyncHandler(async (req, res) 
 }));
 
 // ── GET /applications/:id/messages ────────────────────────────────────────────
-router.get('/:id/messages', requireAuth, asyncHandler(async (req, res) => {
+router.get('/:id/messages', requireAnyAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id || typeof id !== 'string' || id.length > 100) return res.status(400).json({ error: 'Invalid id' });
+
+    // Verify the requester is a participant in this thread
+    const appQueryRes = await ddbSend(new QueryCommand({
+      TableName: APPLICATIONS_TABLE,
+      IndexName: 'ApplicationById',
+      KeyConditionExpression: 'applicationId = :aid',
+      ExpressionAttributeValues: { ':aid': id },
+      Limit: 1,
+    }));
+    const appItem = appQueryRes.Items && appQueryRes.Items[0];
+    if (!appItem) return res.status(404).json({ error: 'Application not found' });
+    if (req.recruiterEmail && appItem.recruiterId !== req.recruiterEmail) return res.status(403).json({ error: 'Forbidden' });
+    if (req.seekerId    && appItem.seekerId    !== req.seekerId)    return res.status(403).json({ error: 'Forbidden' });
+
     const result = await ddbSend(new QueryCommand({
       TableName: MESSAGES_TABLE,
       KeyConditionExpression: 'pk = :pk',
@@ -291,35 +324,56 @@ router.get('/:id/messages', requireAuth, asyncHandler(async (req, res) => {
 }));
 
 // ── POST /applications/:id/messages ───────────────────────────────────────────
-router.post('/:id/messages', requireAuth, asyncHandler(async (req, res) => {
+// threadAuth: recruiter owns the job OR seeker submitted the application.
+router.post('/:id/messages', requireAnyAuth, validate(createMessageSchema), asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { body: msgBody, jobId } = req.body;
     if (!id || typeof id !== 'string' || id.length > 100) return res.status(400).json({ error: 'Invalid id' });
-    if (!msgBody || typeof msgBody !== 'string' || msgBody.trim().length === 0) return res.status(400).json({ error: 'Message body required' });
-    if (msgBody.length > 3000) return res.status(400).json({ error: 'Message too long (max 3000 chars)' });
+    const { body: msgBody } = req.validated;
+
+    // Load application to verify thread ownership
+    const appQueryRes = await ddbSend(new QueryCommand({
+      TableName: APPLICATIONS_TABLE,
+      IndexName: 'ApplicationById',
+      KeyConditionExpression: 'applicationId = :aid',
+      ExpressionAttributeValues: { ':aid': id },
+      Limit: 1,
+    }));
+    const appItem = appQueryRes.Items && appQueryRes.Items[0];
+    if (!appItem) return res.status(404).json({ error: 'Application not found' });
+
+    const isRecruiter = !!req.recruiterEmail;
+    const isSeeker    = !!req.seekerId;
+    if (isRecruiter && appItem.recruiterId !== req.recruiterEmail) return res.status(403).json({ error: 'Forbidden' });
+    if (isSeeker    && appItem.seekerId    !== req.seekerId)       return res.status(403).json({ error: 'Forbidden' });
+
+    const senderId   = isRecruiter ? req.recruiterEmail : req.seekerId;
+    const senderName = isRecruiter
+      ? req.recruiterEmail.split('@')[0]
+      : (req.seekerEmail || req.seekerId).split('@')[0];
+    const senderRole = isRecruiter ? 'recruiter' : 'seeker';
+
     const now   = new Date().toISOString();
     const msgId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
     const message = {
       pk: `APPLICATION#${id}`,
       sk: `MSG#${now}#${msgId}`,
       messageId: msgId, applicationId: id,
-      senderId: req.recruiterEmail, senderName: req.recruiterEmail.split('@')[0],
-      senderRole: 'recruiter', body: msgBody.trim(), sentAt: now,
+      senderId, senderName, senderRole,
+      body: msgBody.trim(), sentAt: now,
     };
     await ddbSend(new PutCommand({ TableName: MESSAGES_TABLE, Item: message }));
 
-    if (jobId) {
-      const appRes = await ddbSend(new GetCommand({
-        TableName: APPLICATIONS_TABLE,
-        Key: { pk: `JOB#${jobId}`, sk: `APPLICATION#${id}` },
-      }));
-      const appItem = appRes.Item || {};
-      if (appItem.seekerId) {
-        createNotification(appItem.seekerId, 'new_message', id, jobId,
-          `New message from recruiter`,
-          msgBody.trim().slice(0, 120) + (msgBody.length > 120 ? '…' : ''),
-        ).catch(() => {});
-      }
+    // Notify the other party
+    const appJobId = appItem.jobId;
+    const preview  = msgBody.trim().slice(0, 120) + (msgBody.length > 120 ? '…' : '');
+    if (isRecruiter && appItem.seekerId && appJobId) {
+      createNotification(appItem.seekerId, 'new_message', id, appJobId,
+        'New message from recruiter', preview,
+      ).catch(() => {});
+    } else if (isSeeker && appItem.recruiterId && appJobId) {
+      createNotification(appItem.recruiterId, 'new_message', id, appJobId,
+        `New message from ${appItem.candidateName || 'candidate'}`, preview,
+      ).catch(() => {});
     }
     res.status(201).json({ message });
 }));

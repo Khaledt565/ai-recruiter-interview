@@ -50,6 +50,9 @@ export const ERROR_CODES = {
   JOB_CLOSED:        'JOB_CLOSED',
   JOB_LIMIT_REACHED: 'JOB_LIMIT_REACHED',
 
+  // ── Pipeline ──────────────────────────────────────────────────────────────
+  INVALID_STATUS_TRANSITION: 'INVALID_STATUS_TRANSITION',
+
   // ── General ───────────────────────────────────────────────────────────────
   VALIDATION_ERROR:       'VALIDATION_ERROR',
   UPLOAD_FAILED:          'UPLOAD_FAILED',

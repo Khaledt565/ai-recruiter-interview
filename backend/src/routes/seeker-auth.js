@@ -10,21 +10,14 @@ import { ses, USERS_TABLE, SEEKER_JWT_SECRET, SES_FROM_EMAIL, FRONTEND_URL } fro
 import { ddbSend } from '../utils/aws-wrappers.js';
 import { seekerAuthLimiter, hashPassword, verifyPassword } from '../utils/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { validate } from '../middleware/validate.js';
+import { signupSchema } from '../utils/schemas.js';
 
 const router = Router();
 
 // ── POST /seeker/auth/signup ──────────────────────────────────────────────────
-router.post('/signup', seekerAuthLimiter, asyncHandler(async (req, res) => {
-    const { email, password, fullName } = req.body;
-    if (!email || typeof email !== 'string' || !email.includes('@')) {
-      return res.status(400).json({ error: 'Valid email is required' });
-    }
-    if (!password || typeof password !== 'string' || password.length < 8) { // pragma: allowlist secret
-      return res.status(400).json({ error: 'Password must be at least 8 characters' });
-    }
-    if (!fullName || typeof fullName !== 'string' || !fullName.trim()) {
-      return res.status(400).json({ error: 'Full name is required' });
-    }
+router.post('/signup', seekerAuthLimiter, validate(signupSchema), asyncHandler(async (req, res) => {
+    const { email, password, fullName } = req.validated; // pragma: allowlist secret
     const normalEmail = email.toLowerCase().trim();
 
     const existing = await ddbSend(new QueryCommand({

@@ -80,6 +80,31 @@ export function verifyPassword(password, stored) {
   }
 }
 
+// ── Dual-mode auth (accepts either a recruiter Cognito token or a seeker JWT) ─
+// Sets req.recruiterEmail (Cognito) or req.seekerId + req.seekerEmail (seeker).
+export function requireAnyAuth(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) return res.status(401).json({ error: 'Authentication required' });
+
+  // Try seeker HS256 first (synchronous fast path)
+  try {
+    const decoded = jwt.verify(token, SEEKER_JWT_SECRET, { algorithms: ['HS256'] }); // pragma: allowlist secret
+    if (decoded.role === 'seeker') {
+      req.seekerId    = decoded.sub;
+      req.seekerEmail = decoded.email;
+      return next();
+    }
+  } catch { /* not a seeker token — fall through to Cognito */ }
+
+  // Fall back to Cognito RS256 (asynchronous)
+  jwt.verify(token, getSigningKey, { algorithms: ['RS256'] }, (err, decoded) => {
+    if (err) return res.status(401).json({ error: 'Invalid or expired token' });
+    req.recruiterEmail = decoded.email || decoded['cognito:username'];
+    next();
+  });
+}
+
 // ── Rate limiter for seeker auth endpoints ────────────────────────────────────
 export const seekerAuthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

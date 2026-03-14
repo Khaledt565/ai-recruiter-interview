@@ -7,6 +7,8 @@ import { JOBS_TABLE, QUESTION_TEMPLATES_TABLE } from '../utils/clients.js';
 import { ddbSend } from '../utils/aws-wrappers.js';
 import { requireAuth } from '../utils/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { validate } from '../middleware/validate.js';
+import { createJobSchema } from '../utils/schemas.js';
 
 // ── Recruiter routes — mount at /jobs ─────────────────────────────────────────
 const jobsRouter = Router();
@@ -21,36 +23,16 @@ jobsRouter.get('/', requireAuth, asyncHandler(async (req, res) => {
     res.json({ jobs: result.Items || [] });
 }));
 
-jobsRouter.post('/', requireAuth, asyncHandler(async (req, res) => {
+jobsRouter.post('/', requireAuth, validate(createJobSchema), asyncHandler(async (req, res) => {
     const {
       title, description, requirements, location, employmentType,
       salaryMin, salaryMax, salaryCurrency,
       scoreThreshold, recommendationThreshold,
       interviewMode, questionTemplateId, customQuestions, status,
-    } = req.body;
-
-    if (!title || typeof title !== 'string' || !title.trim()) {
-      return res.status(400).json({ error: 'title is required' });
-    }
-    if (!description || typeof description !== 'string' || !description.trim()) {
-      return res.status(400).json({ error: 'description is required' });
-    }
-    if (typeof description === 'string' && description.length > 30000) {
-      return res.status(400).json({ error: 'description is too long' });
-    }
+    } = req.validated;
 
     const validStatuses = ['draft', 'open', 'paused', 'closed'];
     const validModes    = ['auto', 'template', 'custom'];
-    if (status && !validStatuses.includes(status)) {
-      return res.status(400).json({ error: 'Invalid status' });
-    }
-    if (interviewMode && !validModes.includes(interviewMode)) {
-      return res.status(400).json({ error: 'Invalid interviewMode' });
-    }
-    if (Array.isArray(customQuestions) && customQuestions.length > 10) {
-      return res.status(400).json({ error: 'Maximum 10 custom questions' });
-    }
-
     const jobId    = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const now      = new Date().toISOString();
     const jobStatus = validStatuses.includes(status) ? status : 'draft';
