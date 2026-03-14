@@ -191,6 +191,7 @@ Resources:
                 Resource:
                   - !GetAtt EmailRetryQueue.Arn
                   - !GetAtt ScoringRetryQueue.Arn
+                  - !GetAtt ReportRetryQueue.Arn
 
   # ===================================
   # SQS Queues for async retries
@@ -237,6 +238,28 @@ Resources:
       VisibilityTimeout: 60
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt ScoringRetryDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  ReportRetryDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "ai-recruiter-report-retry-dlq-${EnvironmentName}"
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  ReportRetryQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "ai-recruiter-report-retry-${EnvironmentName}"
+      MessageRetentionPeriod: 86400  # 1 day
+      VisibilityTimeout: 60
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ReportRetryDLQ.Arn
         maxReceiveCount: 3
       Tags:
         - Key: Environment
@@ -367,6 +390,8 @@ Resources:
               Value: !Ref EmailRetryQueue
             - Name: SQS_SCORING_RETRY_QUEUE_URL
               Value: !Ref ScoringRetryQueue
+            - Name: SQS_REPORT_RETRY_QUEUE_URL
+              Value: !Ref ReportRetryQueue
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -548,3 +573,9 @@ Outputs:
     Value: !Ref ScoringRetryQueue
     Export:
       Name: !Sub "${AWS::StackName}-ScoringRetryQueueUrl"
+
+  ReportRetryQueueUrl:
+    Description: SQS queue URL for failed interview report generation retries
+    Value: !Ref ReportRetryQueue
+    Export:
+      Name: !Sub "${AWS::StackName}-ReportRetryQueueUrl"

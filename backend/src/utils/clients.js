@@ -26,6 +26,7 @@ export const LINK_SECRET              = process.env.LINK_SECRET                 
 export const FRONTEND_URL             = process.env.FRONTEND_URL                 || 'https://d5k7p6fyxagls.cloudfront.net';
 export const SQS_EMAIL_RETRY_QUEUE_URL   = process.env.SQS_EMAIL_RETRY_QUEUE_URL   || '';
 export const SQS_SCORING_RETRY_QUEUE_URL = process.env.SQS_SCORING_RETRY_QUEUE_URL || '';
+export const SQS_REPORT_RETRY_QUEUE_URL  = process.env.SQS_REPORT_RETRY_QUEUE_URL  || '';
 
 export const polly = new PollyClient({ region: REGION });
 export const s3    = new S3Client({ region: REGION });

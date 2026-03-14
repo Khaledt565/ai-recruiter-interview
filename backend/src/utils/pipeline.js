@@ -4,9 +4,11 @@
 import { GetCommand, UpdateCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
+import { SendMessageCommand } from '@aws-sdk/client-sqs';
 import {
-  ddb, s3, polly,
+  ddb, s3, polly, sqs,
   SESSION_TABLE, APPLICATIONS_TABLE, INTERVIEW_REPORTS_TABLE, S3_CV_BUCKET, SES_FROM_EMAIL,
+  SQS_REPORT_RETRY_QUEUE_URL,
 } from './clients.js';
 import { ddbSend } from './aws-wrappers.js';
 import { generateCandidateSummary } from '../interview-engine.js';
@@ -135,7 +137,40 @@ export async function saveInterviewSnapshot(meetingId, attendeeId, status) {
     if (status === 'completed') {
       if (meta.applicationId) {
         finalizeInterviewPipeline(meetingId, meta, state.history || [], state.jobDescription || meta.jobDescription || null)
-          .catch(err => console.error('❌ Pipeline finalization failed:', err.message));
+          .catch(async (err) => {
+            const failedAt = new Date().toISOString();
+            console.error(`\u274C Pipeline finalization failed for ${meetingId}:`, err.message);
+            // Mark session as pending_report so the candidate sees it as complete
+            try {
+              await ddbSend(new UpdateCommand({
+                TableName: SESSION_TABLE,
+                Key: { pk: `INTERVIEW#${meetingId}`, sk: 'META' },
+                UpdateExpression: 'SET #st = :s, updatedAt = :now',
+                ExpressionAttributeNames: { '#st': 'status' },
+                ExpressionAttributeValues: { ':s': 'pending_report', ':now': failedAt },
+              }));
+            } catch (updateErr) {
+              console.error('[Pipeline] Failed to set pending_report status:', updateErr.message);
+            }
+            // Queue for async retry
+            if (SQS_REPORT_RETRY_QUEUE_URL) {
+              try {
+                await sqs.send(new SendMessageCommand({
+                  QueueUrl: SQS_REPORT_RETRY_QUEUE_URL,
+                  MessageBody: JSON.stringify({
+                    interviewId: meetingId,
+                    applicationId: meta.applicationId || null,
+                    jobId: meta.jobId || null,
+                    failedAt,
+                  }),
+                  DelaySeconds: 120, // 2 minutes
+                }));
+                console.log(`[Pipeline] Queued report retry for ${meetingId}`);
+              } catch (sqsErr) {
+                console.error('[Pipeline] Failed to queue report retry:', sqsErr.message);
+              }
+            }
+          });
       } else if (meta.recruiterEmail && SES_FROM_EMAIL) {
         await sendRecruiterEmail(meta.recruiterEmail, meta.candidateName, aiSummary, meetingId);
       }

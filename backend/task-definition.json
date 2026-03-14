@@ -44,6 +44,10 @@
         {
           "name": "SQS_SCORING_RETRY_QUEUE_URL",
           "value": ""
+        },
+        {
+          "name": "SQS_REPORT_RETRY_QUEUE_URL",
+          "value": ""
         }
       ],
       "logConfiguration": {

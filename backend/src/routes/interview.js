@@ -10,6 +10,8 @@ import { sendCandidateInvitationEmail } from '../utils/email.js';
 import { processTranscript } from '../interview-engine.js';
 import { saveInterviewSnapshot, generateSpeechWithFallback } from '../utils/pipeline.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { ERROR_CODES } from '../utils/errors.js';
+import { loadState } from '../session-store.js';
 
 const router = Router();
 
@@ -89,25 +91,103 @@ router.get('/validate/:interviewId', asyncHandler(async (req, res) => {
     const { interviewId } = req.params;
     const { token } = req.query;
 
+    // ── 1. HMAC signature check ──────────────────────────────────────────────
     if (!token || !verifyLinkToken(interviewId, token)) {
-      return res.status(403).json({ error: 'Invalid or missing interview token' });
+      return res.status(403).json({
+        code: ERROR_CODES.TOKEN_INVALID,
+        error: "This link doesn't seem to be valid. Please check your email or contact the recruiter.",
+      });
     }
 
-    const result = await ddbSend(new GetCommand({
+    const metaRes = await ddbSend(new GetCommand({
       TableName: SESSION_TABLE,
-      Key: { pk: `INTERVIEW#${interviewId}`, sk: `META` },
+      Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' },
     }));
 
-    if (!result.Item) return res.status(404).json({ error: 'Interview not found' });
-    if (new Date(result.Item.expiresAt) < new Date()) return res.status(410).json({ error: 'Interview link expired' });
-    if (result.Item.status === 'completed') return res.status(410).json({ error: 'Interview already completed' });
+    // ── 2. Token not found in database ──────────────────────────────────────
+    if (!metaRes.Item) {
+      return res.status(404).json({
+        code: ERROR_CODES.TOKEN_INVALID,
+        error: "This link doesn't seem to be valid. Please check your email or contact the recruiter.",
+      });
+    }
 
-    res.json({
-      valid:         true,
-      candidateName: result.Item.candidateName,
-      attendeeId:    result.Item.attendeeId,
-      interviewId:   result.Item.interviewId,
-      jobDescription: result.Item.jobDescription || null,
+    const meta = metaRes.Item;
+    const now  = new Date().toISOString();
+
+    // ── 3. Link expired — persist the status change and reject ──────────────
+    if (new Date(meta.expiresAt) < new Date()) {
+      if (meta.status !== 'expired') {
+        ddbSend(new UpdateCommand({
+          TableName: SESSION_TABLE,
+          Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' },
+          UpdateExpression: 'SET #st = :s, updatedAt = :now',
+          ExpressionAttributeNames: { '#st': 'status' },
+          ExpressionAttributeValues: { ':s': 'expired', ':now': now },
+        })).catch(e => console.error('[validate] Failed to mark expired:', e.message));
+      }
+      return res.status(410).json({
+        code: ERROR_CODES.TOKEN_EXPIRED,
+        error: 'This interview link has expired. Please contact the recruiter to request a new one.',
+      });
+    }
+
+    // ── 4. Already completed or pending report generation ───────────────────
+    if (meta.status === 'completed' || meta.status === 'pending_report') {
+      return res.status(410).json({
+        code: ERROR_CODES.INTERVIEW_ALREADY_COMPLETE,
+        error: "You've already completed this interview. Your results have been sent to the recruiter.",
+      });
+    }
+
+    // ── 5. In-progress — try to resume from last unanswered question ─────────
+    if (meta.status === 'in_progress') {
+      let attendeeState = null;
+      try {
+        const stateRes = await ddbSend(new GetCommand({
+          TableName: SESSION_TABLE,
+          Key: { pk: `MEETING#${interviewId}`, sk: `ATTENDEE#${meta.attendeeId}` },
+        }));
+        attendeeState = stateRes.Item || null;
+      } catch { /* fall through to fresh-start branch below */ }
+
+      if (attendeeState?.started && Array.isArray(attendeeState.questions) && attendeeState.questions.length > 0 && !attendeeState.done) {
+        const totalQuestions  = attendeeState.questions.length;
+        const currentQuestion = attendeeState.qIndex + 1; // 1-based for display
+        return res.json({
+          valid:          true,
+          resuming:       true,
+          candidateName:  meta.candidateName,
+          attendeeId:     meta.attendeeId,
+          interviewId:    meta.interviewId,
+          jobDescription: meta.jobDescription || null,
+          currentQuestion,
+          totalQuestions,
+          welcomeMessage: `Welcome back \u2014 you're on question ${currentQuestion} of ${totalQuestions}. Pick up where you left off.`,
+        });
+      }
+      // Attendee state not yet initialised (e.g. crashed before first /process call)
+      // Fall through and return a fresh-start response without re-writing META
+    }
+
+    // ── 6. Valid fresh start — mark in_progress + record startedAt ───────────
+    if (meta.status !== 'in_progress') {
+      await ddbSend(new UpdateCommand({
+        TableName: SESSION_TABLE,
+        Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' },
+        UpdateExpression: 'SET #st = :s, startedAt = :now, updatedAt = :now',
+        ExpressionAttributeNames: { '#st': 'status' },
+        ExpressionAttributeValues: { ':s': 'in_progress', ':now': now },
+      }));
+    }
+
+    return res.json({
+      valid:          true,
+      resuming:       false,
+      candidateName:  meta.candidateName,
+      attendeeId:     meta.attendeeId,
+      interviewId:    meta.interviewId,
+      jobDescription: meta.jobDescription || null,
     });
 }));
 
@@ -221,7 +301,7 @@ router.post('/regenerate/:interviewId', requireAuth, asyncHandler(async (req, re
 
 // ── POST /interview/process ───────────────────────────────────────────────────
 router.post('/process', asyncHandler(async (req, res) => {
-    const { meetingId, attendeeId, transcriptText, isInit, token } = req.body;
+    const { meetingId, attendeeId, transcriptText, isInit, token, questionIndex } = req.body;
 
     if (!meetingId || typeof meetingId !== 'string' || meetingId.length > 100) {
       return res.status(400).json({ error: 'Invalid meetingId' });
@@ -254,6 +334,18 @@ router.post('/process', asyncHandler(async (req, res) => {
       }
     }
 
+    // ── Duplicate-answer guard ───────────────────────────────────────────────
+    // If the client includes questionIndex (the index of the question being answered),
+    // detect replayed requests for questions already recorded and return next question.
+    if (!isInit && typeof questionIndex === 'number') {
+      let existingState = null;
+      try { existingState = await loadState(meetingId, attendeeId); } catch { /* best-effort */ }
+      if (existingState && typeof existingState.qIndex === 'number' && questionIndex < existingState.qIndex) {
+        const nextQ = (existingState.questions || [])[existingState.qIndex] || '';
+        return res.json({ spokenText: nextQ, done: existingState.done || false, qIndex: existingState.qIndex });
+      }
+    }
+
     const result = await processTranscript({
       meetingId, attendeeId, transcriptText,
       isInit: isInit === true,
@@ -262,6 +354,7 @@ router.post('/process', asyncHandler(async (req, res) => {
 
     if (result.done) {
       await saveInterviewSnapshot(meetingId, attendeeId, 'completed');
+      result.completionMessage = "Your interview is complete. We're processing your results \u2014 the recruiter will be notified shortly.";
     }
 
     if (req.query.withAudio === 'true' && result.spokenText) {
