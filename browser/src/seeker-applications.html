@@ -97,6 +97,13 @@
     .empty-cta { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; background: var(--accent); color: #fff; text-decoration: none; border-radius: 9px; font-size: 13.5px; font-weight: 600; }
 
     @media (max-width: 560px) { .detail-panel { width: 100%; } .main { padding: 20px 14px; } }
+    /* ── Toast ─────────────────────────────────────────────────────── */
+    .toast-wrap { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+    .toast { padding: 11px 16px; border-radius: 10px; font-size: 13.5px; font-weight: 500; box-shadow: 0 4px 20px rgba(0,0,0,0.15); animation: toastIn 0.25s ease; max-width: 320px; }
+    @keyframes toastIn { from { transform: translateY(-12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .toast-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .toast-error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    .toast-warning { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
     /* ── Notification Bell ───────────────────────────────────────── */
     .notif-wrap { position: relative; }
     .bell-btn { position: relative; background: none; border: 1.5px solid rgba(255,255,255,0.25); border-radius: 8px; padding: 7px 10px; cursor: pointer; color: rgba(255,255,255,0.85); font-size: 17px; transition: all 0.15s; display: flex; align-items: center; }
@@ -186,7 +193,7 @@
   </div>
   <div class="panel-body" id="panelBody"></div>
 </div>
-
+<div class="toast-wrap" id="toastWrap"></div>
 <script>
   var token = localStorage.getItem('seeker_token');
   if (!token) { window.location.replace('seeker-login.html'); }
@@ -204,6 +211,15 @@
 
   function esc(s) { return String(s || '').replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }); }
+
+  function showToast(msg, type) {
+    var w = document.getElementById('toastWrap');
+    var t = document.createElement('div');
+    t.className = 'toast toast-' + (type || 'success');
+    t.textContent = msg;
+    w.appendChild(t);
+    setTimeout(function() { t.remove(); }, 4000);
+  }
   function timeAgo(d) {
     if (!d) return '—';
     var s = Math.floor((Date.now() - new Date(d)) / 1000);
@@ -460,25 +476,36 @@
       body: JSON.stringify({ body: body }),
     })
       .then(function(r) { return r.json(); })
-      .then(function() { loadSeekerMessages(_currentDetailAppId); })
-      .catch(function() { alert('Failed to send message'); })
+      .then(function() { loadSeekerMessages(_currentDetailAppId); showToast('Message sent'); })
+      .catch(function() { showToast('Failed to send message', 'error'); })
       .finally(function() { btn.disabled = false; });
   }
 
   // Load applications
-  fetch(BACKEND_URL + '/seeker/applications', { headers: { 'Authorization': 'Bearer ' + token } })
-    .then(function(r) {
-      if (r.status === 401) { window.location.replace('seeker-login.html'); return null; }
-      return r.json();
-    })
-    .then(function(data) {
-      if (!data) return;
-      renderList(data.applications || []);
-    })
-    .catch(function() {
-      document.getElementById('appList').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Couldn\'t load applications</div><div class="empty-sub">Please refresh the page.</div></div>';
-      document.getElementById('pageSubtitle').textContent = 'Error loading data';
-    });
+  function loadApplications() {
+    document.getElementById('appList').innerHTML =
+      '<div class="sk-card"><div class="sk sk-line" style="width:50%"></div><div class="sk sk-line" style="width:30%"></div><div class="sk sk-line" style="width:70%"></div></div>' +
+      '<div class="sk-card"><div class="sk sk-line" style="width:55%"></div><div class="sk sk-line" style="width:35%"></div><div class="sk sk-line" style="width:65%"></div></div>';
+    document.getElementById('pageSubtitle').textContent = 'Loading\u2026';
+    fetch(BACKEND_URL + '/seeker/applications', { headers: { 'Authorization': 'Bearer ' + token } })
+      .then(function(r) {
+        if (r.status === 401) { window.location.replace('seeker-login.html'); return null; }
+        if (!r.ok) throw new Error();
+        return r.json();
+      })
+      .then(function(data) {
+        if (!data) return;
+        renderList(data.applications || []);
+      })
+      .catch(function() {
+        document.getElementById('appList').innerHTML =
+          '<div class="empty-state"><div class="empty-icon">\u26a0\ufe0f</div><div class="empty-title">Couldn\u2019t load applications</div>' +
+          '<div class="empty-sub">Please check your connection and try again.</div>' +
+          '<button onclick="loadApplications()" style="margin-top:16px;display:inline-flex;align-items:center;gap:6px;padding:9px 20px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-size:13.5px;font-weight:600;cursor:pointer;">Try again</button></div>';
+        document.getElementById('pageSubtitle').textContent = '';
+      });
+  }
+  loadApplications();
 </script>
 </body>
 </html>

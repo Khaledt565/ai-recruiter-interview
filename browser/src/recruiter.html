@@ -198,10 +198,11 @@
     .skeleton { background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 6px; }
     @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     .loading-row td { padding: 12px 16px; }
-    .toast { position: fixed; bottom: 28px; right: 28px; background: #1f2937; color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 500; box-shadow: 0 8px 24px rgba(0,0,0,0.2); transform: translateY(80px); opacity: 0; transition: all 0.25s ease; z-index: 999; display: flex; align-items: center; gap: 8px; }
+    .toast { position: fixed; top: 20px; right: 28px; background: #1f2937; color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 500; box-shadow: 0 8px 24px rgba(0,0,0,0.2); transform: translateY(-60px); opacity: 0; transition: all 0.25s ease; z-index: 999; display: flex; align-items: center; gap: 8px; }
     .toast.show { transform: translateY(0); opacity: 1; }
     .toast.success { border-left: 3px solid #10b981; }
     .toast.error   { border-left: 3px solid #ef4444; }
+    .toast.warning { border-left: 3px solid #f59e0b; }
     @media (max-width: 1100px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .dashboard-grid { grid-template-columns: 1fr; } .create-layout { grid-template-columns: 1fr; } }
     @media (max-width: 768px) { :root { --sidebar-w: 0px; } .sidebar { display: none; } .main { margin-left: 0; } .stats-grid { grid-template-columns: 1fr 1fr; } .form-row { grid-template-columns: 1fr; } .detail-grid { grid-template-columns: 1fr; } }
 
@@ -951,9 +952,10 @@
   function showToast(msg, type) {
     type = type || 'success';
     var t = document.getElementById('toast');
-    t.textContent = (type === 'success' ? '\u2705 ' : '\u274C ') + msg;
+    t.textContent = (type === 'success' ? '\u2705 ' : type === 'warning' ? '\u26a0\ufe0f ' : '\u274C ') + msg;
     t.className = 'toast ' + type + ' show';
-    setTimeout(function() { t.classList.remove('show'); }, 3200);
+    clearTimeout(t._timer);
+    t._timer = setTimeout(function() { t.classList.remove('show'); }, 4000);
   }
 
   // Data state
@@ -980,7 +982,16 @@
         allSessions = data.sessions || [];
         document.getElementById('candidateBadge').textContent = allSessions.length || '0';
       })
-      .catch(function(e) { console.error('Load sessions error:', e); });
+      .catch(function(e) {
+        console.error('Load sessions error:', e);
+        var tbody = document.getElementById('candidatesBody');
+        if (tbody) {
+          tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="es-icon">\u26a0\ufe0f</div>' +
+            '<p>Couldn\u2019t load candidates right now.</p>' +
+            '<button onclick="loadCandidates()" style="margin-top:12px;padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">Try again</button>' +
+            '</div></td></tr>';
+        }
+      });
   }
 
   function loadDashboard() {
@@ -2344,7 +2355,7 @@
       body: JSON.stringify({ body: body, jobId: _currentJobId }),
     })
       .then(function(r) { return r.json(); })
-      .then(function() { loadMessages(_currentAppId); })
+      .then(function() { loadMessages(_currentAppId); showToast('Message sent'); })
       .catch(function() { showToast('Failed to send message', 'error'); })
       .finally(function() { btn.disabled = false; });
   }

@@ -17,12 +17,12 @@ class InterviewApp {
     // Configuration - Dynamic Backend URL
     // Production: Use API Gateway HTTPS endpoint that proxies to backend
     // Local: Use localhost HTTP
-    const backendHost = window.location.hostname === 'localhost' 
-      ? 'localhost:8080' 
+    const backendHost = window.location.hostname === 'localhost'
+      ? 'localhost:8080'
       : 'l05uyc9rza.execute-api.eu-central-1.amazonaws.com/prod';
-    
+
     const backendProtocol = window.location.hostname === 'localhost' ? 'http' : 'https';
-    
+
     this.config = {
       backendHttpUrl: `${backendProtocol}://${backendHost}/interview/process`,  // ✅ CORRECT!
       backendBaseUrl: `${backendProtocol}://${backendHost}`,
@@ -32,14 +32,17 @@ class InterviewApp {
 
     this.initUI();
     this.checkInterviewLink();
+    window.addEventListener('offline', () => this._handleOffline());
+    window.addEventListener('online', () => this._handleOnline());
   }
 
   initUI() {
     const container = document.getElementById('app');
     container.innerHTML = `
       <div class="interview-container">
+        <div id="offline-banner" style="display:none;background:#fef3c7;border:1.5px solid #fde68a;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13.5px;color:#92400e;font-weight:500;">⚠️ You're offline — your last answer has been saved. We'll continue when you reconnect.</div>
         <h1>AI Recruiter Interview</h1>
-        
+
         <div class="status" id="status">
           <span class="dot"></span>
           <span id="status-text">Validating interview link...</span>
@@ -97,7 +100,7 @@ class InterviewApp {
       this.attendeeId = data.attendeeId;
 
       this.updateStatus(`Welcome ${data.candidateName}! Ready to start your interview.`, '');
-      document.getElementById('interviewer-text').textContent = 
+      document.getElementById('interviewer-text').textContent =
         `Hello ${data.candidateName}! Click "Start Interview" when you're ready.`;
       document.getElementById('start-btn').disabled = false;
 
@@ -161,9 +164,9 @@ class InterviewApp {
     } catch (error) {
       console.error('❌ Full error object:', error);
       console.error('Error stack:', error.stack);
-      
+
       let userMessage = 'Something went wrong. Please try again.';
-      
+
       if (error.message.includes('NetworkError') || error.message.includes('fetch')) {
         userMessage = '❌ Connection lost. Check your internet connection.';
       } else if (error.message.includes('NotAllowedError')) {
@@ -171,7 +174,7 @@ class InterviewApp {
       } else if (error.message.includes('Transcribe')) {
         userMessage = '🎙️ Microphone error. Please refresh and try again.';
       }
-      
+
       this.updateStatus(userMessage, 'error');
       document.getElementById('start-btn').disabled = false;
     }
@@ -214,6 +217,23 @@ class InterviewApp {
   }
 
   async sendToBackend(meetingId, attendeeId, text) {
+    // Save answer to localStorage before attempting the request
+    if (text) {
+      try {
+        localStorage.setItem('interview_pending_answer', JSON.stringify({
+          interviewId: this.interviewId,
+          text,
+          meetingId,
+          attendeeId,
+        }));
+      } catch (_) {}
+    }
+
+    if (!navigator.onLine) {
+      this._handleOffline();
+      return;
+    }
+
     try {
       const response = await fetch(this.config.backendHttpUrl + '?withAudio=true', {
         method: 'POST',
@@ -232,6 +252,9 @@ class InterviewApp {
       const data = await response.json();
       console.log('Backend response:', data);
 
+      // Clear pending answer on successful response
+      try { localStorage.removeItem('interview_pending_answer'); } catch (_) {}
+
       document.getElementById('interviewer-text').textContent = data.spokenText;
 
       if (data.audioBase64) {
@@ -249,13 +272,13 @@ class InterviewApp {
       }
     } catch (error) {
       console.error('Backend error:', error);
-      
+
       let userMessage = 'Something went wrong. Please try again.';
-      
+
       if (error.message.includes('NetworkError') || error.message.includes('fetch')) {
         userMessage = '❌ Connection lost. Check your internet connection.';
       }
-      
+
       this.updateStatus(userMessage, 'error');
       document.getElementById('interviewer-text').textContent = userMessage;
     }
@@ -276,6 +299,42 @@ class InterviewApp {
     }
     const byteArray = new Uint8Array(byteNumbers);
     return new Blob([byteArray], { type: mimeType });
+  }
+
+  _handleOffline() {
+    const banner = document.getElementById('offline-banner');
+    if (banner) banner.style.display = '';
+    // Pause transcription while offline
+    if (this.transcribeClient && this.isInterviewActive) {
+      this.transcribeClient.stopTranscription();
+    }
+  }
+
+  async _handleOnline() {
+    const banner = document.getElementById('offline-banner');
+    if (banner) banner.style.display = 'none';
+
+    // Re-submit any saved answer
+    try {
+      const pendingStr = localStorage.getItem('interview_pending_answer');
+      if (!pendingStr) return;
+      const pending = JSON.parse(pendingStr);
+      if (pending.interviewId !== this.interviewId) return;
+
+      this.isInterviewActive = true;
+      await this.sendToBackend(pending.meetingId, pending.attendeeId, pending.text);
+
+      // Restart transcription
+      if (this.transcribeClient) {
+        await this.transcribeClient.startTranscription(
+          (finalText) => this.handleFinalTranscript(finalText),
+          (partialText) => this.handlePartialTranscript(partialText)
+        );
+        this.updateStatus('Speaking... (Interview in progress)', 'active');
+      }
+    } catch (e) {
+      console.error('Error resuming after reconnect:', e);
+    }
   }
 }
 

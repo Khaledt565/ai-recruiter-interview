@@ -94,6 +94,12 @@
     .alert { padding: 11px 14px; border-radius: 9px; font-size: 13px; font-weight: 500; margin-bottom: 16px; display: none; }
     .alert.visible { display: block; }
     .alert-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    /* ── Toast ── */
+    .toast-wrap { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+    .toast { padding: 11px 16px; border-radius: 10px; font-size: 13.5px; font-weight: 500; box-shadow: 0 4px 20px rgba(0,0,0,0.15); animation: toastIn 0.25s ease; max-width: 320px; }
+    @keyframes toastIn { from { transform: translateY(-12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .toast-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .toast-error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
 
     .spinner { width: 16px; height: 16px; border: 2.5px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -190,7 +196,7 @@
           <input type="file" id="cvFileInput" accept=".pdf,.doc,.docx" onchange="handleCvUpload(this.files[0])" />
           <div style="font-size:24px;margin-bottom:6px">📤</div>
           <div style="font-size:13.5px;font-weight:600" id="cvUploadLabel">Drop your CV or click to browse</div>
-          <div style="font-size:12px;color:var(--muted)">PDF, DOC, or DOCX — max 10 MB</div>
+          <div style="font-size:12px;color:var(--muted)">PDF or DOCX — max 5 MB</div>
         </div>
       </div>
 
@@ -225,6 +231,8 @@
 
 </div>
 
+<div class="toast-wrap" id="toastWrap"></div>
+
 <script>
   var token   = localStorage.getItem('seeker_token');
   var seekerId = localStorage.getItem('seeker_id');
@@ -247,6 +255,15 @@
 
   function esc(s) { return String(s || '').replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function empLabel(t) { return t === 'full-time' ? 'Full-time' : t === 'part-time' ? 'Part-time' : t === 'contract' ? 'Contract' : t || ''; }
+
+  function showToast(msg, type) {
+    var w = document.getElementById('toastWrap');
+    var t = document.createElement('div');
+    t.className = 'toast toast-' + (type || 'success');
+    t.textContent = msg;
+    w.appendChild(t);
+    setTimeout(function() { t.remove(); }, 4000);
+  }
   function updateCoverCount() {
     document.getElementById('coverCount').textContent = document.getElementById('coverLetter').value.length;
   }
@@ -365,11 +382,18 @@
   // ── Inline CV upload (for applicants without a CV on file) ───────
   function handleCvUpload(file) {
     if (!file) return;
-    var allowed = ['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    if (!allowed.includes(file.type)) { showError('Please upload a PDF or Word document'); return; }
-    if (file.size > 10 * 1024 * 1024) { showError('File must be under 10 MB'); return; }
+    var allowed = ['application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowed.includes(file.type)) { showError('Please upload a PDF or Word document under 5MB.'); return; }
+    if (file.size > 5 * 1024 * 1024) { showError('Please upload a PDF or Word document under 5MB.'); return; }
 
-    document.getElementById('cvUploadLabel').textContent = 'Reading "' + file.name + '"…';
+    var progress = document.getElementById('cvApplyProgress');
+    var bar = document.getElementById('cvApplyProgressBar');
+    var msg = document.getElementById('cvApplyProgressMsg');
+    progress.style.display = '';
+    bar.style.width = '20%';
+    msg.textContent = 'Reading \u201c' + file.name + '\u201d\u2026';
+
+    document.getElementById('cvUploadLabel').textContent = 'Reading \u201c' + file.name + '\u201d\u2026';
     setCvStatus('working', '⏳ Extracting text from ' + file.name + '…');
 
     var reader = new FileReader();
@@ -380,6 +404,8 @@
       extractFromArrayBuffer(buf, file.name);
 
       // 2. Upload to profile in background
+      bar.style.width = '60%';
+      msg.textContent = 'Uploading\u2026';
       var bytes = new Uint8Array(buf), bin = '';
       for (var k = 0; k < bytes.byteLength; k++) bin += String.fromCharCode(bytes[k]);
       var base64 = btoa(bin);
@@ -390,7 +416,9 @@
       })
         .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
         .then(function(res) {
-          if (!res.ok) { showError('CV upload failed: ' + (res.data.error || 'unknown error')); return; }
+          if (!res.ok) { showError('CV upload failed: ' + (res.data.error || 'unknown error')); bar.style.width='0%'; msg.textContent=''; return; }
+          bar.style.width = '100%';
+          msg.textContent = '\u2713 CV ready';
           profileCvUrl = res.data.cvUrl;
           document.getElementById('cvUploadLabel').textContent = '✓ ' + file.name + ' uploaded';
           document.getElementById('cvExisting').style.display = '';
@@ -435,6 +463,7 @@
         btn.disabled = false;
         btn.innerHTML = 'Submit application';
         if (!res.ok) { showError(res.data.error || 'Failed to submit application'); return; }
+        showToast('Application submitted successfully!');
         // Show success screen
         var msg = res.data.status === 'interview_invited'
           ? 'Your profile scored well! Check your email for an AI interview invitation.'

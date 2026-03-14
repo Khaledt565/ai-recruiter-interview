@@ -94,9 +94,9 @@
     .spinner { width: 15px; height: 15px; border: 2.5px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .toast-wrap { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+    .toast-wrap { position: fixed; top: 20px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
     .toast { padding: 12px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 500; box-shadow: 0 4px 20px rgba(0,0,0,0.15); animation: slideUp 0.25s ease; max-width: 340px; }
-    @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(-12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     .toast-success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
     .toast-error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
 
@@ -230,7 +230,7 @@
       <input type="file" id="cvFileInput" accept=".pdf,.doc,.docx" onchange="handleCvFile(this.files[0])" />
       <div class="cv-zone-icon">📤</div>
       <div class="cv-zone-title" id="cvZoneTitle">Drop your CV here or click to browse</div>
-      <div class="cv-zone-sub">PDF, DOC, or DOCX — max 10 MB</div>
+      <div class="cv-zone-sub">PDF or DOCX — max 5 MB</div>
     </div>
     <div class="upload-progress" id="uploadProgress" style="display:none">
       <div class="upload-bar-track"><div class="upload-bar-fill" id="uploadBarFill" style="width:0%"></div></div>
@@ -331,9 +331,9 @@
 
   function handleCvFile(file) {
     if (!file) return;
-    var allowed = ['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    if (!allowed.includes(file.type)) { showToast('Please upload a PDF or Word document', 'error'); return; }
-    if (file.size > 10 * 1024 * 1024) { showToast('File must be under 10 MB', 'error'); return; }
+    var allowed = ['application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowed.includes(file.type)) { showToast('Please upload a PDF or Word document under 5MB.', 'error'); return; }
+    if (file.size > 5 * 1024 * 1024) { showToast('Please upload a PDF or Word document under 5MB.', 'error'); return; }
     document.getElementById('cvZoneTitle').textContent = file.name;
     uploadCv(file);
   }

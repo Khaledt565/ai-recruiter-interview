@@ -96,9 +96,9 @@
     .empty-sub { color: var(--muted); font-size: 13.5px; }
 
     /* ── Toast ── */
-    .toast-wrap { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+    .toast-wrap { position: fixed; top: 20px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
     .toast { padding: 12px 18px; border-radius: 10px; font-size: 13.5px; font-weight: 500; box-shadow: 0 4px 20px rgba(0,0,0,0.15); animation: slideUp 0.25s ease; max-width: 320px; }
-    @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(-12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     .toast-error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
     .toast-info  { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
 
@@ -307,19 +307,27 @@
   }
 
   // Load jobs
-  (function loadJobs() {
+  function loadJobs() {
+    document.getElementById('jobsGrid').innerHTML =
+      '<div class="sk-card" id="sk1"><div class="sk sk-logo"></div><div class="sk-body"><div class="sk sk-line" style="width:55%"></div><div class="sk sk-line" style="width:35%"></div><div class="sk sk-line" style="width:70%"></div></div></div>' +
+      '<div class="sk-card" id="sk2"><div class="sk sk-logo"></div><div class="sk-body"><div class="sk sk-line" style="width:60%"></div><div class="sk sk-line" style="width:30%"></div><div class="sk sk-line" style="width:65%"></div></div></div>' +
+      '<div class="sk-card" id="sk3"><div class="sk sk-logo"></div><div class="sk-body"><div class="sk sk-line" style="width:50%"></div><div class="sk sk-line" style="width:40%"></div><div class="sk sk-line" style="width:55%"></div></div></div>';
+    document.getElementById('countLabel').innerHTML = 'Loading\u2026';
     fetch(BACKEND_URL + '/public/jobs')
-      .then(function(r) { return r.json(); })
+      .then(function(r) { if (!r.ok) throw new Error(); return r.json(); })
       .then(function(data) {
         jobs = data.jobs || [];
         document.getElementById('statJobs').textContent = jobs.length;
         applyFiltersAndSort();
       })
       .catch(function() {
-        document.getElementById('jobsGrid').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Couldn\'t load jobs</div><div class="empty-sub">Please try refreshing the page</div></div>';
-        document.getElementById('countLabel').textContent = 'Error loading jobs';
+        document.getElementById('jobsGrid').innerHTML =
+          '<div class="empty-state"><div class="empty-icon">\u26a0\ufe0f</div><div class="empty-title">Couldn\u2019t load jobs</div><div class="empty-sub">Please check your connection and try again.</div>' +
+          '<button onclick="loadJobs()" style="margin-top:16px;padding:9px 20px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13.5px;font-weight:600;cursor:pointer;">Try again</button></div>';
+        document.getElementById('countLabel').textContent = '';
       });
-  })();
+  }
+  loadJobs();
 </script>
 </body>
 </html>
