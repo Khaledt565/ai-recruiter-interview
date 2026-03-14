@@ -1,7 +1,8 @@
 // All outbound SES email functions.
 
 import { SendEmailCommand } from '@aws-sdk/client-ses';
-import { ses, SES_FROM_EMAIL } from './clients.js';
+import { SES_FROM_EMAIL } from './clients.js';
+import { sesSend } from './aws-wrappers.js';
 
 export async function sendCandidateInvitationEmail(candidateName, candidateEmail, interviewLink) {
   if (!SES_FROM_EMAIL) return;
@@ -35,7 +36,7 @@ export async function sendCandidateInvitationEmail(candidateName, candidateEmail
     </div>
   </div>
 </body></html>`;
-    await ses.send(new SendEmailCommand({
+    await sesSend(new SendEmailCommand({
       Source: SES_FROM_EMAIL,
       Destination: { ToAddresses: [candidateEmail] },
       Message: {
@@ -45,7 +46,7 @@ export async function sendCandidateInvitationEmail(candidateName, candidateEmail
           Text: { Data: `Hello ${candidateName},\n\nYou have been invited to an AI-powered interview.\n\nClick this link to begin:\n${interviewLink}\n\nThe link is valid for 7 days and can only be used once.\n\nGood luck!` },
         },
       },
-    }));
+    }), { recipient: candidateEmail, template: 'candidate_invitation' });
     console.log(`✅ Invitation email sent to ${candidateEmail}`);
   } catch (err) {
     console.error('❌ Failed to send invitation email (non-fatal):', err.message);
@@ -74,14 +75,14 @@ export async function sendRecruiterEmail(recruiterEmail, candidateName, summary,
     if (concerns) bodyLines.push(``, `Concerns:`, concerns);
     bodyLines.push(``, `View full transcript in your recruiter dashboard.`);
 
-    await ses.send(new SendEmailCommand({
+    await sesSend(new SendEmailCommand({
       Source: SES_FROM_EMAIL,
       Destination: { ToAddresses: [recruiterEmail] },
       Message: {
         Subject: { Data: `Interview Complete: ${candidateName} — ${rec}` },
         Body: { Text: { Data: bodyLines.join('\n') } },
       },
-    }));
+    }), { recipient: recruiterEmail, template: 'recruiter_result' });
     console.log(`✅ Recruiter email sent to ${recruiterEmail}`);
   } catch (err) {
     console.error('❌ Failed to send recruiter email (non-fatal):', err.message);
@@ -91,7 +92,7 @@ export async function sendRecruiterEmail(recruiterEmail, candidateName, summary,
 export async function sendRecruiterLowScoreEmail(recruiterEmail, candidateName, jobTitle, score, applicationId) {
   if (!SES_FROM_EMAIL || !recruiterEmail) return;
   try {
-    await ses.send(new SendEmailCommand({
+    await sesSend(new SendEmailCommand({
       Source: SES_FROM_EMAIL,
       Destination: { ToAddresses: [recruiterEmail] },
       Message: {
@@ -111,7 +112,7 @@ export async function sendRecruiterLowScoreEmail(recruiterEmail, candidateName, 
           },
         },
       },
-    }));
+    }), { recipient: recruiterEmail, template: 'recruiter_low_score' });
     console.log(`✅ Low-score recruiter notification sent to ${recruiterEmail}`);
   } catch (err) {
     console.error('❌ Failed to send low-score notification (non-fatal):', err.message);
@@ -121,7 +122,7 @@ export async function sendRecruiterLowScoreEmail(recruiterEmail, candidateName, 
 export async function sendInterviewCompleteNotification(recruiterEmail, candidateName, jobTitle, combinedScore, interviewId) {
   if (!SES_FROM_EMAIL || !recruiterEmail) return;
   try {
-    await ses.send(new SendEmailCommand({
+    await sesSend(new SendEmailCommand({
       Source: SES_FROM_EMAIL,
       Destination: { ToAddresses: [recruiterEmail] },
       Message: {
@@ -140,7 +141,7 @@ export async function sendInterviewCompleteNotification(recruiterEmail, candidat
           },
         },
       },
-    }));
+    }), { recipient: recruiterEmail, template: 'interview_complete' });
     console.log(`✅ Interview complete notification sent to ${recruiterEmail}`);
   } catch (err) {
     console.error('❌ Failed to send interview complete notification (non-fatal):', err.message);

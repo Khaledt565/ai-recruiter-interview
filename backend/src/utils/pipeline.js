@@ -8,6 +8,7 @@ import {
   ddb, s3, polly,
   SESSION_TABLE, APPLICATIONS_TABLE, INTERVIEW_REPORTS_TABLE, S3_CV_BUCKET, SES_FROM_EMAIL,
 } from './clients.js';
+import { ddbSend } from './aws-wrappers.js';
 import { generateCandidateSummary } from '../interview-engine.js';
 import { generateInterviewReport } from '../bedrock-client.js';
 import { sendRecruiterEmail, sendInterviewCompleteNotification } from './email.js';
@@ -28,11 +29,41 @@ export async function generateSpeech(text) {
   return Buffer.concat(chunks);
 }
 
+/**
+ * Attempts Polly speech synthesis. On any failure:
+ *  - Logs a structured CloudWatch entry
+ *  - Sets fallbackMode = true on the InterviewSession DDB record (if interviewId given)
+ *  - Returns null — callers should switch to text mode
+ */
+export async function generateSpeechWithFallback(text, interviewId) {
+  try {
+    return await generateSpeech(text);
+  } catch (err) {
+    console.error(JSON.stringify({
+      level: 'ERROR', event: 'polly_failed',
+      interviewId: interviewId || null,
+      reason: err.message,
+      timestamp: new Date().toISOString(),
+    }));
+    if (interviewId) {
+      try {
+        await ddb.send(new UpdateCommand({
+          TableName: SESSION_TABLE,
+          Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' },
+          UpdateExpression: 'SET fallbackMode = :t, updatedAt = :now',
+          ExpressionAttributeValues: { ':t': true, ':now': new Date().toISOString() },
+        }));
+      } catch { /* ignore — best-effort update */ }
+    }
+    return null; // Signal caller: drop to text mode
+  }
+}
+
 export async function saveInterviewSnapshot(meetingId, attendeeId, status) {
   try {
     const [stateRes, metaRes] = await Promise.all([
-      ddb.send(new GetCommand({ TableName: SESSION_TABLE, Key: { pk: `MEETING#${meetingId}`, sk: `ATTENDEE#${attendeeId}` } })),
-      ddb.send(new GetCommand({ TableName: SESSION_TABLE, Key: { pk: `INTERVIEW#${meetingId}`, sk: `META` } })),
+      ddbSend(new GetCommand({ TableName: SESSION_TABLE, Key: { pk: `MEETING#${meetingId}`, sk: `ATTENDEE#${attendeeId}` } })),
+      ddbSend(new GetCommand({ TableName: SESSION_TABLE, Key: { pk: `INTERVIEW#${meetingId}`, sk: `META` } })),
     ]);
     const state = stateRes.Item || {};
     const meta  = metaRes.Item  || {};
@@ -93,7 +124,7 @@ export async function saveInterviewSnapshot(meetingId, attendeeId, status) {
       exprValues[':summary'] = aiSummary.summary;
     }
 
-    await ddb.send(new UpdateCommand({
+    await ddbSend(new UpdateCommand({
       TableName: SESSION_TABLE,
       Key: { pk: `INTERVIEW#${meetingId}`, sk: `META` },
       UpdateExpression: updateExpr,
@@ -126,7 +157,7 @@ export async function finalizeInterviewPipeline(interviewId, meta, history, jobD
     );
 
     const appKey = { pk: `JOB#${meta.jobId}`, sk: `APPLICATION#${meta.applicationId}` };
-    const appRes = await ddb.send(new GetCommand({ TableName: APPLICATIONS_TABLE, Key: appKey }));
+    const appRes = await ddbSend(new GetCommand({ TableName: APPLICATIONS_TABLE, Key: appKey }));
     const app    = appRes.Item || {};
     const aiProfileScore = typeof app.aiProfileScore === 'number' ? app.aiProfileScore : 0;
 
@@ -139,7 +170,7 @@ export async function finalizeInterviewPipeline(interviewId, meta, history, jobD
     console.log(`${tag} combinedScore: ${combinedScore} (profile ${aiProfileScore}×0.4 + interview ${aiInterviewScore}×0.6), autoRecommended: ${autoRecommended}`);
 
     const now = new Date().toISOString();
-    await ddb.send(new PutCommand({
+    await ddbSend(new PutCommand({
       TableName: INTERVIEW_REPORTS_TABLE,
       Item: {
         pk: `SESSION#${interviewId}`,
@@ -158,7 +189,7 @@ export async function finalizeInterviewPipeline(interviewId, meta, history, jobD
       },
     }));
 
-    await ddb.send(new UpdateCommand({
+    await ddbSend(new UpdateCommand({
       TableName: APPLICATIONS_TABLE,
       Key: appKey,
       UpdateExpression: 'SET aiInterviewScore = :iScore, combinedScore = :cScore, recommended = :rec, #st = :st, updatedAt = :now',

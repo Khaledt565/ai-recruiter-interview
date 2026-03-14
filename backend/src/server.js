@@ -12,8 +12,9 @@ import { fileURLToPath } from 'url';
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
 
 import { ddb, SESSION_TABLE } from './utils/clients.js';
+import { ddbSend } from './utils/aws-wrappers.js';
 import { verifyLinkToken } from './utils/auth.js';
-import { generateSpeech, saveInterviewSnapshot } from './utils/pipeline.js';
+import { generateSpeechWithFallback, saveInterviewSnapshot } from './utils/pipeline.js';
 import { processTranscript } from './interview-engine.js';
 
 import jobsRouter, { publicJobsRouter } from './routes/jobs.js';
@@ -132,7 +133,7 @@ wss.on('connection', (ws) => {
         let candidateName = null;
         let customQuestions = null;
         try {
-          const metaRes = await ddb.send(new GetCommand({
+          const metaRes = await ddbSend(new GetCommand({
             TableName: SESSION_TABLE,
             Key: { pk: `INTERVIEW#${mid}`, sk: 'META' },
           }));
@@ -152,11 +153,12 @@ wss.on('connection', (ws) => {
           candidateName,
           customQuestions,
         });
-        const audioBuffer = await generateSpeech(result.spokenText);
+        const audioBuffer = await generateSpeechWithFallback(result.spokenText, mid);
         ws.send(JSON.stringify({
           type: 'response',
           spokenText: result.spokenText,
-          audioBase64: audioBuffer.toString('base64'),
+          audioBase64: audioBuffer ? audioBuffer.toString('base64') : null,
+          textMode: !audioBuffer,
           done: result.done,
           qIndex: result.qIndex,
         }));
@@ -175,11 +177,12 @@ wss.on('connection', (ws) => {
           transcriptText: data.text,
           isInit: false,
         });
-        const audioBuffer = await generateSpeech(result.spokenText);
+        const audioBuffer = await generateSpeechWithFallback(result.spokenText, meetingId);
         ws.send(JSON.stringify({
           type: 'response',
           spokenText: result.spokenText,
-          audioBase64: audioBuffer.toString('base64'),
+          audioBase64: audioBuffer ? audioBuffer.toString('base64') : null,
+          textMode: !audioBuffer,
           done: result.done,
           qIndex: result.qIndex,
         }));

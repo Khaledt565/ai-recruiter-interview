@@ -2,14 +2,15 @@
 
 import { Router } from 'express';
 import { PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { ddb, QUESTION_TEMPLATES_TABLE } from '../utils/clients.js';
+import { QUESTION_TEMPLATES_TABLE } from '../utils/clients.js';
+import { ddbSend } from '../utils/aws-wrappers.js';
 import { requireAuth } from '../utils/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
 
 router.get('/', requireAuth, asyncHandler(async (req, res) => {
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: QUESTION_TEMPLATES_TABLE,
       KeyConditionExpression: 'pk = :pk',
       ExpressionAttributeValues: { ':pk': `RECRUITER#${req.recruiterEmail}` },
@@ -32,7 +33,7 @@ router.post('/', requireAuth, asyncHandler(async (req, res) => {
 
     const templateId = `tpl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const now = new Date().toISOString();
-    await ddb.send(new PutCommand({
+    await ddbSend(new PutCommand({
       TableName: QUESTION_TEMPLATES_TABLE,
       Item: {
         pk: `RECRUITER#${req.recruiterEmail}`,

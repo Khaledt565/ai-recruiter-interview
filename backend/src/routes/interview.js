@@ -2,12 +2,13 @@
 
 import { Router } from 'express';
 import { GetCommand, PutCommand, UpdateCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
-import { ddb, SESSION_TABLE, FRONTEND_URL } from '../utils/clients.js';
+import { SESSION_TABLE, FRONTEND_URL } from '../utils/clients.js';
+import { ddbSend } from '../utils/aws-wrappers.js';
 import { requireAuth, generateLinkToken, verifyLinkToken } from '../utils/auth.js';
 import { suggestQuestionsFromCV } from '../bedrock-client.js';
 import { sendCandidateInvitationEmail } from '../utils/email.js';
 import { processTranscript } from '../interview-engine.js';
-import { saveInterviewSnapshot, generateSpeech } from '../utils/pipeline.js';
+import { saveInterviewSnapshot, generateSpeechWithFallback } from '../utils/pipeline.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
@@ -40,7 +41,7 @@ router.post('/create', requireAuth, asyncHandler(async (req, res) => {
     const linkToken   = generateLinkToken(interviewId);
     const expiresAt   = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    await ddb.send(new PutCommand({
+    await ddbSend(new PutCommand({
       TableName: SESSION_TABLE,
       Item: {
         pk: `INTERVIEW#${interviewId}`,
@@ -71,7 +72,7 @@ router.get('/result/:interviewId', asyncHandler(async (req, res) => {
     if (!interviewId || typeof interviewId !== 'string' || interviewId.length > 100) {
       return res.status(400).json({ error: 'Invalid interview ID' });
     }
-    const result = await ddb.send(new GetCommand({
+    const result = await ddbSend(new GetCommand({
       TableName: SESSION_TABLE,
       Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' },
     }));
@@ -92,7 +93,7 @@ router.get('/validate/:interviewId', asyncHandler(async (req, res) => {
       return res.status(403).json({ error: 'Invalid or missing interview token' });
     }
 
-    const result = await ddb.send(new GetCommand({
+    const result = await ddbSend(new GetCommand({
       TableName: SESSION_TABLE,
       Key: { pk: `INTERVIEW#${interviewId}`, sk: `META` },
     }));
@@ -116,7 +117,7 @@ router.get('/sessions', requireAuth, asyncHandler(async (req, res) => {
     if (!recruiterEmail || typeof recruiterEmail !== 'string') {
       return res.status(400).json({ error: 'recruiterEmail query param is required' });
     }
-    const result = await ddb.send(new ScanCommand({
+    const result = await ddbSend(new ScanCommand({
       TableName: SESSION_TABLE,
       FilterExpression: 'recruiterEmail = :email AND sk = :meta',
       ExpressionAttributeValues: { ':email': recruiterEmail, ':meta': 'META' },
@@ -144,14 +145,14 @@ router.get('/transcript/:interviewId', requireAuth, asyncHandler(async (req, res
     if (!interviewId || typeof interviewId !== 'string' || interviewId.length > 100) {
       return res.status(400).json({ error: 'Invalid interview ID' });
     }
-    const metaRes = await ddb.send(new GetCommand({
+    const metaRes = await ddbSend(new GetCommand({
       TableName: SESSION_TABLE,
       Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' },
     }));
     if (!metaRes.Item) return res.status(404).json({ error: 'Interview not found' });
     if (metaRes.Item.recruiterEmail !== req.recruiterEmail) return res.status(403).json({ error: 'Forbidden' });
     const { attendeeId } = metaRes.Item;
-    const stateRes = await ddb.send(new GetCommand({
+    const stateRes = await ddbSend(new GetCommand({
       TableName: SESSION_TABLE,
       Key: { pk: `MEETING#${interviewId}`, sk: `ATTENDEE#${attendeeId}` },
     }));
@@ -168,10 +169,10 @@ router.delete('/:interviewId', requireAuth, asyncHandler(async (req, res) => {
     if (!interviewId || typeof interviewId !== 'string' || interviewId.length > 100) {
       return res.status(400).json({ error: 'Invalid interview ID' });
     }
-    const itemRes = await ddb.send(new GetCommand({ TableName: SESSION_TABLE, Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' } }));
+    const itemRes = await ddbSend(new GetCommand({ TableName: SESSION_TABLE, Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' } }));
     if (!itemRes.Item) return res.status(404).json({ error: 'Interview not found' });
     if (itemRes.Item.recruiterEmail !== req.recruiterEmail) return res.status(403).json({ error: 'Forbidden' });
-    await ddb.send(new UpdateCommand({
+    await ddbSend(new UpdateCommand({
       TableName: SESSION_TABLE,
       Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' },
       UpdateExpression: 'SET archived = :a, updatedAt = :now',
@@ -186,7 +187,7 @@ router.post('/resend-invite/:interviewId', requireAuth, asyncHandler(async (req,
     if (!interviewId || typeof interviewId !== 'string' || interviewId.length > 100) {
       return res.status(400).json({ error: 'Invalid interview ID' });
     }
-    const itemRes = await ddb.send(new GetCommand({ TableName: SESSION_TABLE, Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' } }));
+    const itemRes = await ddbSend(new GetCommand({ TableName: SESSION_TABLE, Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' } }));
     if (!itemRes.Item) return res.status(404).json({ error: 'Interview not found' });
     if (itemRes.Item.recruiterEmail !== req.recruiterEmail) return res.status(403).json({ error: 'Forbidden' });
     const { candidateName, candidateEmail } = itemRes.Item;
@@ -201,12 +202,12 @@ router.post('/regenerate/:interviewId', requireAuth, asyncHandler(async (req, re
     if (!interviewId || typeof interviewId !== 'string' || interviewId.length > 100) {
       return res.status(400).json({ error: 'Invalid interview ID' });
     }
-    const itemRes = await ddb.send(new GetCommand({ TableName: SESSION_TABLE, Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' } }));
+    const itemRes = await ddbSend(new GetCommand({ TableName: SESSION_TABLE, Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' } }));
     if (!itemRes.Item) return res.status(404).json({ error: 'Interview not found' });
     if (itemRes.Item.recruiterEmail !== req.recruiterEmail) return res.status(403).json({ error: 'Forbidden' });
     if (itemRes.Item.status === 'completed') return res.status(400).json({ error: 'Cannot regenerate a completed interview' });
     const newExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-    await ddb.send(new UpdateCommand({
+    await ddbSend(new UpdateCommand({
       TableName: SESSION_TABLE,
       Key: { pk: `INTERVIEW#${interviewId}`, sk: 'META' },
       UpdateExpression: 'SET expiresAt = :exp, #st = :st, updatedAt = :now',
@@ -240,7 +241,7 @@ router.post('/process', asyncHandler(async (req, res) => {
     let customQuestions = null;
     if (isInit === true) {
       try {
-        const metaRes = await ddb.send(new GetCommand({
+        const metaRes = await ddbSend(new GetCommand({
           TableName: SESSION_TABLE,
           Key: { pk: `INTERVIEW#${meetingId}`, sk: 'META' },
         }));
@@ -264,8 +265,9 @@ router.post('/process', asyncHandler(async (req, res) => {
     }
 
     if (req.query.withAudio === 'true' && result.spokenText) {
-      const audioData = await generateSpeech(result.spokenText);
-      result.audioBase64 = audioData.toString('base64');
+      const audioData = await generateSpeechWithFallback(result.spokenText, meetingId);
+      result.audioBase64 = audioData ? audioData.toString('base64') : null;
+      if (!audioData) result.textMode = true;
     }
 
     res.json(result);

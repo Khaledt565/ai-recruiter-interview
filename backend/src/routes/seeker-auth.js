@@ -6,7 +6,8 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { SendEmailCommand } from '@aws-sdk/client-ses';
 import { PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { ddb, ses, USERS_TABLE, SEEKER_JWT_SECRET, SES_FROM_EMAIL, FRONTEND_URL } from '../utils/clients.js';
+import { ses, USERS_TABLE, SEEKER_JWT_SECRET, SES_FROM_EMAIL, FRONTEND_URL } from '../utils/clients.js';
+import { ddbSend } from '../utils/aws-wrappers.js';
 import { seekerAuthLimiter, hashPassword, verifyPassword } from '../utils/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
@@ -26,7 +27,7 @@ router.post('/signup', seekerAuthLimiter, asyncHandler(async (req, res) => {
     }
     const normalEmail = email.toLowerCase().trim();
 
-    const existing = await ddb.send(new QueryCommand({
+    const existing = await ddbSend(new QueryCommand({
       TableName: USERS_TABLE,
       IndexName: 'UsersByEmail',
       KeyConditionExpression: 'email = :em',
@@ -39,7 +40,7 @@ router.post('/signup', seekerAuthLimiter, asyncHandler(async (req, res) => {
 
     const userId = `user_${Date.now()}_${crypto.randomBytes(5).toString('hex')}`;
     const now    = new Date().toISOString();
-    await ddb.send(new PutCommand({
+    await ddbSend(new PutCommand({
       TableName: USERS_TABLE,
       Item: {
         pk: `USER#${userId}`,
@@ -77,7 +78,7 @@ router.post('/login', seekerAuthLimiter, asyncHandler(async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
     const normalEmail = email.toLowerCase().trim();
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: USERS_TABLE,
       IndexName: 'UsersByEmail',
       KeyConditionExpression: 'email = :em',
@@ -110,7 +111,7 @@ router.post('/forgot-password', seekerAuthLimiter, asyncHandler(async (req, res)
     }
     const normalEmail = email.toLowerCase().trim();
 
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: USERS_TABLE,
       IndexName: 'UsersByEmail',
       KeyConditionExpression: 'email = :em',
@@ -125,7 +126,7 @@ router.post('/forgot-password', seekerAuthLimiter, asyncHandler(async (req, res)
     const resetToken  = crypto.randomBytes(32).toString('hex');
     const resetExpiry = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
-    await ddb.send(new UpdateCommand({
+    await ddbSend(new UpdateCommand({
       TableName: USERS_TABLE,
       Key: { pk: `USER#${user.userId}`, sk: 'PROFILE' },
       UpdateExpression: 'SET resetToken = :t, resetExpiry = :e',
@@ -169,7 +170,7 @@ router.post('/reset-password', seekerAuthLimiter, asyncHandler(async (req, res) 
     }
     const normalEmail = email.toLowerCase().trim();
 
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: USERS_TABLE,
       IndexName: 'UsersByEmail',
       KeyConditionExpression: 'email = :em',
@@ -185,7 +186,7 @@ router.post('/reset-password', seekerAuthLimiter, asyncHandler(async (req, res) 
       return res.status(400).json({ error: 'Reset link has expired. Please request a new one.' });
     }
 
-    await ddb.send(new UpdateCommand({
+    await ddbSend(new UpdateCommand({
       TableName: USERS_TABLE,
       Key: { pk: `USER#${user.userId}`, sk: 'PROFILE' },
       UpdateExpression: 'SET passwordHash = :h, updatedAt = :u REMOVE resetToken, resetExpiry',

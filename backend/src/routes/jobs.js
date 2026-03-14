@@ -3,7 +3,8 @@
 
 import { Router }  from 'express';
 import { PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { ddb, JOBS_TABLE, QUESTION_TEMPLATES_TABLE } from '../utils/clients.js';
+import { JOBS_TABLE, QUESTION_TEMPLATES_TABLE } from '../utils/clients.js';
+import { ddbSend } from '../utils/aws-wrappers.js';
 import { requireAuth } from '../utils/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
@@ -11,7 +12,7 @@ import { asyncHandler } from '../middleware/errorHandler.js';
 const jobsRouter = Router();
 
 jobsRouter.get('/', requireAuth, asyncHandler(async (req, res) => {
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: JOBS_TABLE,
       KeyConditionExpression: 'pk = :pk',
       ExpressionAttributeValues: { ':pk': `RECRUITER#${req.recruiterEmail}` },
@@ -55,7 +56,7 @@ jobsRouter.post('/', requireAuth, asyncHandler(async (req, res) => {
     const jobStatus = validStatuses.includes(status) ? status : 'draft';
     const mode      = validModes.includes(interviewMode) ? interviewMode : 'auto';
 
-    await ddb.send(new PutCommand({
+    await ddbSend(new PutCommand({
       TableName: JOBS_TABLE,
       Item: {
         pk: `RECRUITER#${req.recruiterEmail}`,
@@ -98,7 +99,7 @@ export const publicJobsRouter = Router();
 
 publicJobsRouter.get('/', asyncHandler(async (req, res) => {
     const { search, location, employmentType } = req.query;
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: JOBS_TABLE,
       IndexName: 'JobsByStatus',
       KeyConditionExpression: '#st = :st',
@@ -141,7 +142,7 @@ publicJobsRouter.get('/:jobId', asyncHandler(async (req, res) => {
     if (!jobId || typeof jobId !== 'string' || jobId.length > 100) {
       return res.status(400).json({ error: 'Invalid job ID' });
     }
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: JOBS_TABLE,
       IndexName: 'JobsByJobId',
       KeyConditionExpression: 'jobId = :jid',

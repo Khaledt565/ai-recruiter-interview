@@ -3,8 +3,8 @@
 
 import { Router } from 'express';
 import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { PutObjectCommand } from '@aws-sdk/client-s3';
-import { ddb, s3, USERS_TABLE, S3_CV_BUCKET, REGION } from '../utils/clients.js';
+import { USERS_TABLE, S3_CV_BUCKET, REGION } from '../utils/clients.js';
+import { ddbSend, s3Upload } from '../utils/aws-wrappers.js';
 import { requireSeekerAuth } from '../utils/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
@@ -12,7 +12,7 @@ const router = Router();
 
 // ── GET /seeker/profile ───────────────────────────────────────────────────────
 router.get('/profile', requireSeekerAuth, asyncHandler(async (req, res) => {
-    const result = await ddb.send(new GetCommand({
+    const result = await ddbSend(new GetCommand({
       TableName: USERS_TABLE,
       Key: { pk: `USER#${req.seekerId}`, sk: 'PROFILE' },
     }));
@@ -45,7 +45,7 @@ router.put('/profile', requireSeekerAuth, asyncHandler(async (req, res) => {
     const cleanAvail = validAvailabilities.includes(availability) ? availability : null;
     const cleanBio   = bio ? String(bio).trim().substring(0, 2000) : null;
 
-    const existing = await ddb.send(new GetCommand({
+    const existing = await ddbSend(new GetCommand({
       TableName: USERS_TABLE,
       Key: { pk: `USER#${req.seekerId}`, sk: 'PROFILE' },
     }));
@@ -68,7 +68,7 @@ router.put('/profile', requireSeekerAuth, asyncHandler(async (req, res) => {
     if (merged.cvUrl)                           score += 15;
     merged.profileComplete = Math.min(100, score);
 
-    await ddb.send(new PutCommand({ TableName: USERS_TABLE, Item: merged }));
+    await ddbSend(new PutCommand({ TableName: USERS_TABLE, Item: merged }));
     res.json({ profileComplete: merged.profileComplete });
 }));
 
@@ -93,17 +93,17 @@ router.post('/profile/cv', requireSeekerAuth, asyncHandler(async (req, res) => {
     const ext   = safeMime === 'application/pdf' ? 'pdf' : safeMime === 'application/msword' ? 'doc' : 'docx';
     const s3Key = `cvs/${req.seekerId}/${Date.now()}.${ext}`;
 
-    await s3.send(new PutObjectCommand({
+    await s3Upload({
       Bucket: S3_CV_BUCKET,
       Key: s3Key,
       Body: buffer,
       ContentType: safeMime,
       ServerSideEncryption: 'AES256',
-    }));
+    });
 
     const cvUrl = `https://${S3_CV_BUCKET}.s3.${REGION}.amazonaws.com/${s3Key}`;
 
-    const existing = await ddb.send(new GetCommand({
+    const existing = await ddbSend(new GetCommand({
       TableName: USERS_TABLE,
       Key: { pk: `USER#${req.seekerId}`, sk: 'PROFILE' },
     }));
@@ -117,7 +117,7 @@ router.post('/profile/cv', requireSeekerAuth, asyncHandler(async (req, res) => {
       if (merged.bio)                             score += 10;
       if (merged.cvUrl)                           score += 15;
       merged.profileComplete = Math.min(100, score);
-      await ddb.send(new PutCommand({ TableName: USERS_TABLE, Item: merged }));
+      await ddbSend(new PutCommand({ TableName: USERS_TABLE, Item: merged }));
     }
 
     res.json({ cvUrl, s3Key });

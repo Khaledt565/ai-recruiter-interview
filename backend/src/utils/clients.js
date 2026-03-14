@@ -4,6 +4,7 @@
 import { PollyClient } from '@aws-sdk/client-polly';
 import { S3Client } from '@aws-sdk/client-s3';
 import { SESClient } from '@aws-sdk/client-ses';
+import { SQSClient } from '@aws-sdk/client-sqs';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 
@@ -23,8 +24,11 @@ export const MESSAGES_TABLE           = process.env.MESSAGES_TABLE              
 export const SES_FROM_EMAIL           = process.env.SES_FROM_EMAIL               || '';
 export const LINK_SECRET              = process.env.LINK_SECRET                  || 'default-dev-secret-change-in-prod';
 export const FRONTEND_URL             = process.env.FRONTEND_URL                 || 'https://d5k7p6fyxagls.cloudfront.net';
+export const SQS_EMAIL_RETRY_QUEUE_URL   = process.env.SQS_EMAIL_RETRY_QUEUE_URL   || '';
+export const SQS_SCORING_RETRY_QUEUE_URL = process.env.SQS_SCORING_RETRY_QUEUE_URL || '';
 
 export const polly = new PollyClient({ region: REGION });
 export const s3    = new S3Client({ region: REGION });
 export const ses   = new SESClient({ region: REGION });
+export const sqs   = new SQSClient({ region: REGION });
 export const ddb   = DynamoDBDocumentClient.from(new DynamoDBClient({ region: REGION }));

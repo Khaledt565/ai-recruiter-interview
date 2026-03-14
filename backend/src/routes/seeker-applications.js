@@ -3,7 +3,8 @@
 
 import { Router } from 'express';
 import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { ddb, APPLICATIONS_TABLE, JOBS_TABLE, MESSAGES_TABLE, USERS_TABLE } from '../utils/clients.js';
+import { APPLICATIONS_TABLE, JOBS_TABLE, MESSAGES_TABLE, USERS_TABLE } from '../utils/clients.js';
+import { ddbSend } from '../utils/aws-wrappers.js';
 import { requireSeekerAuth } from '../utils/auth.js';
 import { createNotification, notifyStatusChange } from '../utils/notifications.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
@@ -12,7 +13,7 @@ const router = Router();
 
 // ── GET /seeker/applications ───────────────────────────────────────────────────
 router.get('/applications', requireSeekerAuth, asyncHandler(async (req, res) => {
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: APPLICATIONS_TABLE,
       IndexName: 'ApplicationsBySeeker',
       KeyConditionExpression: 'seekerId = :sid',
@@ -34,7 +35,7 @@ router.get('/applications', requireSeekerAuth, asyncHandler(async (req, res) => 
     if (jobIds.length) {
       await Promise.all(jobIds.map(async jid => {
         try {
-          const jr = await ddb.send(new QueryCommand({
+          const jr = await ddbSend(new QueryCommand({
             TableName: JOBS_TABLE,
             IndexName: 'JobsByJobId',
             KeyConditionExpression: 'jobId = :jid',
@@ -62,7 +63,7 @@ router.get('/applications/:id', requireSeekerAuth, asyncHandler(async (req, res)
     if (!id || typeof id !== 'string' || id.length > 100) {
       return res.status(400).json({ error: 'Invalid application ID' });
     }
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: APPLICATIONS_TABLE,
       IndexName: 'ApplicationById',
       KeyConditionExpression: 'applicationId = :aid',
@@ -75,7 +76,7 @@ router.get('/applications/:id', requireSeekerAuth, asyncHandler(async (req, res)
 
     let job = null;
     try {
-      const jr = await ddb.send(new QueryCommand({
+      const jr = await ddbSend(new QueryCommand({
         TableName: JOBS_TABLE,
         IndexName: 'JobsByJobId',
         KeyConditionExpression: 'jobId = :jid',
@@ -105,7 +106,7 @@ router.get('/applications/:id', requireSeekerAuth, asyncHandler(async (req, res)
 // ── POST /seeker/applications/:id/withdraw ────────────────────────────────────
 router.post('/applications/:id/withdraw', requireSeekerAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const appResult = await ddb.send(new QueryCommand({
+    const appResult = await ddbSend(new QueryCommand({
       TableName: APPLICATIONS_TABLE,
       IndexName: 'ApplicationById',
       KeyConditionExpression: 'applicationId = :aid',
@@ -116,7 +117,7 @@ router.post('/applications/:id/withdraw', requireSeekerAuth, asyncHandler(async 
     if (!app) return res.status(404).json({ error: 'Application not found' });
     if (app.seekerId !== req.seekerId) return res.status(403).json({ error: 'Forbidden' });
     const now = new Date().toISOString();
-    await ddb.send(new UpdateCommand({
+    await ddbSend(new UpdateCommand({
       TableName: APPLICATIONS_TABLE,
       Key: { pk: app.pk, sk: app.sk },
       UpdateExpression: 'SET #st = :s, updatedAt = :now',
@@ -136,7 +137,7 @@ router.post('/applications/:id/withdraw', requireSeekerAuth, asyncHandler(async 
 router.get('/applications/:id/messages', requireSeekerAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id || typeof id !== 'string' || id.length > 100) return res.status(400).json({ error: 'Invalid id' });
-    const appResult = await ddb.send(new QueryCommand({
+    const appResult = await ddbSend(new QueryCommand({
       TableName: APPLICATIONS_TABLE,
       IndexName: 'ApplicationById',
       KeyConditionExpression: 'applicationId = :aid',
@@ -146,7 +147,7 @@ router.get('/applications/:id/messages', requireSeekerAuth, asyncHandler(async (
     const app = appResult.Items && appResult.Items[0];
     if (!app) return res.status(404).json({ error: 'Application not found' });
     if (app.seekerId !== req.seekerId) return res.status(403).json({ error: 'Forbidden' });
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: MESSAGES_TABLE,
       KeyConditionExpression: 'pk = :pk',
       ExpressionAttributeValues: { ':pk': `APPLICATION#${id}` },
@@ -163,7 +164,7 @@ router.post('/applications/:id/messages', requireSeekerAuth, asyncHandler(async 
     if (!msgBody || typeof msgBody !== 'string' || msgBody.trim().length === 0) return res.status(400).json({ error: 'Message body required' });
     if (msgBody.length > 3000) return res.status(400).json({ error: 'Message too long (max 3000 chars)' });
 
-    const appResult = await ddb.send(new QueryCommand({
+    const appResult = await ddbSend(new QueryCommand({
       TableName: APPLICATIONS_TABLE,
       IndexName: 'ApplicationById',
       KeyConditionExpression: 'applicationId = :aid',
@@ -174,7 +175,7 @@ router.post('/applications/:id/messages', requireSeekerAuth, asyncHandler(async 
     if (!app) return res.status(404).json({ error: 'Application not found' });
     if (app.seekerId !== req.seekerId) return res.status(403).json({ error: 'Forbidden' });
 
-    const profile = await ddb.send(new GetCommand({
+    const profile = await ddbSend(new GetCommand({
       TableName: USERS_TABLE,
       Key: { pk: `USER#${req.seekerId}`, sk: 'PROFILE' },
     }));
@@ -189,7 +190,7 @@ router.post('/applications/:id/messages', requireSeekerAuth, asyncHandler(async 
       senderId: req.seekerId, senderName,
       senderRole: 'seeker', body: msgBody.trim(), sentAt: now,
     };
-    await ddb.send(new PutCommand({ TableName: MESSAGES_TABLE, Item: message }));
+    await ddbSend(new PutCommand({ TableName: MESSAGES_TABLE, Item: message }));
 
     if (app.recruiterId) {
       createNotification(app.recruiterId, 'new_message', id, app.jobId,

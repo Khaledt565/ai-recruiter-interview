@@ -2,14 +2,15 @@
 
 import { SendEmailCommand } from '@aws-sdk/client-ses';
 import { PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { ddb, ses, NOTIFICATIONS_TABLE, JOBS_TABLE, SES_FROM_EMAIL } from './clients.js';
+import { NOTIFICATIONS_TABLE, JOBS_TABLE, SES_FROM_EMAIL } from './clients.js';
+import { ddbSend, sesSend } from './aws-wrappers.js';
 
 export async function createNotification(userId, type, applicationId, jobId, title, body) {
   try {
     if (!userId) return;
     const now     = new Date().toISOString();
     const notifId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-    await ddb.send(new PutCommand({
+    await ddbSend(new PutCommand({
       TableName: NOTIFICATIONS_TABLE,
       Item: {
         pk:             `USER#${userId}`,
@@ -35,7 +36,7 @@ export async function notifyStatusChange(newStatus, app) {
   let jobTitle = app.jobTitle || null;
   if (!jobTitle && jobId) {
     try {
-      const jr = await ddb.send(new QueryCommand({
+      const jr = await ddbSend(new QueryCommand({
         TableName: JOBS_TABLE,
         IndexName: 'JobsByJobId',
         KeyConditionExpression: 'jobId = :jid',
@@ -91,10 +92,10 @@ export async function notifyStatusChange(newStatus, app) {
   await createNotification(n.userId, newStatus, applicationId, jobId, n.title, n.body);
 
   if (SES_FROM_EMAIL && n.sesTo) {
-    ses.send(new SendEmailCommand({
+    sesSend(new SendEmailCommand({
       Source: SES_FROM_EMAIL,
       Destination: { ToAddresses: [n.sesTo] },
       Message: { Subject: { Data: n.sesSubject }, Body: { Text: { Data: n.sesBody } } },
-    })).catch(e => console.error(`notifyStatusChange SES (${newStatus}):`, e.message));
+    }), { recipient: n.sesTo, template: `status_${newStatus}` }).catch(() => {});
   }
 }

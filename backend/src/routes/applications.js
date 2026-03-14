@@ -4,13 +4,12 @@
 import { Router } from 'express';
 import { GetCommand, PutCommand, UpdateCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import {
-  ddb,
   JOBS_TABLE, APPLICATIONS_TABLE, AI_SESSIONS_TABLE, QUESTION_TEMPLATES_TABLE,
   SESSION_TABLE, INTERVIEW_REPORTS_TABLE, MESSAGES_TABLE,
   FRONTEND_URL,
 } from '../utils/clients.js';
 import { requireAuth, generateLinkToken } from '../utils/auth.js';
-import { scoreProfileWithAI } from '../bedrock-client.js';
+import { ddbSend, scoreWithFallback } from '../utils/aws-wrappers.js';
 import { sendCandidateInvitationEmail, sendRecruiterLowScoreEmail } from '../utils/email.js';
 import { createNotification, notifyStatusChange } from '../utils/notifications.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
@@ -36,7 +35,7 @@ router.post('/', asyncHandler(async (req, res) => {
       return res.status(400).json({ error: 'cvText must be a string under 20000 characters' });
     }
 
-    const jobRes = await ddb.send(new QueryCommand({
+    const jobRes = await ddbSend(new QueryCommand({
       TableName: JOBS_TABLE,
       IndexName: 'JobsByJobId',
       KeyConditionExpression: 'jobId = :jid',
@@ -54,14 +53,16 @@ router.post('/', asyncHandler(async (req, res) => {
     const jobTitle                 = job.title || 'this role';
     const recommendationThreshold  = typeof job.recommendationThreshold === 'number' ? job.recommendationThreshold : 75;
 
-    const { score: aiProfileScore, reasoning } = await scoreProfileWithAI(jobDescription, cvText);
-    console.log(`[Applications] ${candidateName} scored ${aiProfileScore}/100 (threshold: ${scoreThreshold})`);
+    const { score: aiProfileScore, reasoning, scoringPending } = await scoreWithFallback(jobDescription, cvText, null, jobId);
+    console.log(`[Applications] ${candidateName} scored ${aiProfileScore ?? 'pending'}/100 (threshold: ${scoreThreshold})`);
 
     const applicationId  = `app_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const now            = new Date().toISOString();
-    const initialStatus  = aiProfileScore >= scoreThreshold ? 'interview_invited' : 'applied';
+    const initialStatus  = scoringPending
+      ? 'pending_score'
+      : aiProfileScore >= scoreThreshold ? 'interview_invited' : 'applied';
 
-    await ddb.send(new PutCommand({
+    await ddbSend(new PutCommand({
       TableName: APPLICATIONS_TABLE,
       Item: {
         pk: `JOB#${jobId}`,
@@ -86,8 +87,17 @@ router.post('/', asyncHandler(async (req, res) => {
     // Always notify recruiter of new application (in-app)
     createNotification(recruiterEmail, 'new_application', applicationId, jobId,
       `New application – ${candidateName}`,
-      ` applied for ${jobTitle}. AI score: ${aiProfileScore}/100`,
+      ` applied for ${jobTitle}. AI score: ${aiProfileScore ?? 'pending'}/100`,
     ).catch(() => {});
+
+    // Scoring is pending — return immediately without sending invite
+    if (scoringPending) {
+      return res.status(201).json({
+        applicationId,
+        status: 'pending_score',
+        message: 'Application received. AI scoring is temporarily unavailable — we will process your score automatically.',
+      });
+    }
 
     if (aiProfileScore < scoreThreshold) {
       sendRecruiterLowScoreEmail(recruiterEmail, candidateName, jobTitle, aiProfileScore, applicationId).catch(() => {});
@@ -102,7 +112,7 @@ router.post('/', asyncHandler(async (req, res) => {
     // Resolve interview questions based on interviewMode
     let customQuestions = null;
     if (interviewMode === 'template' && job.questionTemplateId) {
-      const tplRes = await ddb.send(new QueryCommand({
+      const tplRes = await ddbSend(new QueryCommand({
         TableName: QUESTION_TEMPLATES_TABLE,
         IndexName: 'TemplateById',
         KeyConditionExpression: 'templateId = :tid',
@@ -125,7 +135,7 @@ router.post('/', asyncHandler(async (req, res) => {
     const linkToken   = generateLinkToken(interviewId);
     const expiresAt   = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    await ddb.send(new PutCommand({
+    await ddbSend(new PutCommand({
       TableName: AI_SESSIONS_TABLE,
       Item: {
         pk: `APPLICATION#${applicationId}`,
@@ -143,7 +153,7 @@ router.post('/', asyncHandler(async (req, res) => {
       },
     }));
 
-    await ddb.send(new PutCommand({
+    await ddbSend(new PutCommand({
       TableName: SESSION_TABLE,
       Item: {
         pk: `INTERVIEW#${interviewId}`,
@@ -187,7 +197,7 @@ router.post('/', asyncHandler(async (req, res) => {
 
 // ── GET /applications ──────────────────────────────────────────────────────────
 router.get('/', requireAuth, asyncHandler(async (req, res) => {
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: APPLICATIONS_TABLE,
       IndexName: 'ApplicationsByRecruiter',
       KeyConditionExpression: 'recruiterId = :rid',
@@ -206,12 +216,12 @@ router.patch('/:applicationId/status', requireAuth, asyncHandler(async (req, res
     if (!jobId || typeof jobId !== 'string') {
       return res.status(400).json({ error: 'jobId is required' });
     }
-    const appItemRes = await ddb.send(new GetCommand({
+    const appItemRes = await ddbSend(new GetCommand({
       TableName: APPLICATIONS_TABLE,
       Key: { pk: `JOB#${jobId}`, sk: `APPLICATION#${applicationId}` },
     }));
     const appItem = appItemRes.Item || {};
-    await ddb.send(new UpdateCommand({
+    await ddbSend(new UpdateCommand({
       TableName: APPLICATIONS_TABLE,
       Key: { pk: `JOB#${jobId}`, sk: `APPLICATION#${applicationId}` },
       UpdateExpression: 'SET #st = :s, updatedAt = :now',
@@ -239,14 +249,14 @@ router.get('/:applicationId/report', requireAuth, asyncHandler(async (req, res) 
     if (!jobId || typeof jobId !== 'string') {
       return res.status(400).json({ error: 'jobId query parameter is required' });
     }
-    const appRes = await ddb.send(new GetCommand({
+    const appRes = await ddbSend(new GetCommand({
       TableName: APPLICATIONS_TABLE,
       Key: { pk: `JOB#${jobId}`, sk: `APPLICATION#${applicationId}` },
     }));
     if (!appRes.Item) return res.status(404).json({ error: 'Application not found' });
     const application = appRes.Item;
 
-    const reportRes = await ddb.send(new QueryCommand({
+    const reportRes = await ddbSend(new QueryCommand({
       TableName: INTERVIEW_REPORTS_TABLE,
       IndexName: 'ReportByApplication',
       KeyConditionExpression: 'applicationId = :aid',
@@ -258,7 +268,7 @@ router.get('/:applicationId/report', requireAuth, asyncHandler(async (req, res) 
     let transcript = null;
     const interviewId = report ? report.interviewId : null;
     if (interviewId) {
-      const histRes = await ddb.send(new GetCommand({
+      const histRes = await ddbSend(new GetCommand({
         TableName: SESSION_TABLE,
         Key: { pk: `INTERVIEW#${interviewId}`, sk: 'HISTORY' },
       }));
@@ -271,7 +281,7 @@ router.get('/:applicationId/report', requireAuth, asyncHandler(async (req, res) 
 router.get('/:id/messages', requireAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id || typeof id !== 'string' || id.length > 100) return res.status(400).json({ error: 'Invalid id' });
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: MESSAGES_TABLE,
       KeyConditionExpression: 'pk = :pk',
       ExpressionAttributeValues: { ':pk': `APPLICATION#${id}` },
@@ -296,10 +306,10 @@ router.post('/:id/messages', requireAuth, asyncHandler(async (req, res) => {
       senderId: req.recruiterEmail, senderName: req.recruiterEmail.split('@')[0],
       senderRole: 'recruiter', body: msgBody.trim(), sentAt: now,
     };
-    await ddb.send(new PutCommand({ TableName: MESSAGES_TABLE, Item: message }));
+    await ddbSend(new PutCommand({ TableName: MESSAGES_TABLE, Item: message }));
 
     if (jobId) {
-      const appRes = await ddb.send(new GetCommand({
+      const appRes = await ddbSend(new GetCommand({
         TableName: APPLICATIONS_TABLE,
         Key: { pk: `JOB#${jobId}`, sk: `APPLICATION#${id}` },
       }));

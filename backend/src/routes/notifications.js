@@ -4,7 +4,8 @@
 
 import { Router } from 'express';
 import { QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { ddb, NOTIFICATIONS_TABLE } from '../utils/clients.js';
+import { NOTIFICATIONS_TABLE } from '../utils/clients.js';
+import { ddbSend } from '../utils/aws-wrappers.js';
 import { requireAuth, requireSeekerAuth } from '../utils/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
@@ -12,7 +13,7 @@ import { asyncHandler } from '../middleware/errorHandler.js';
 const notificationsRouter = Router();
 
 notificationsRouter.get('/', requireAuth, asyncHandler(async (req, res) => {
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: NOTIFICATIONS_TABLE,
       KeyConditionExpression: 'pk = :pk',
       ExpressionAttributeValues: { ':pk': `USER#${req.recruiterEmail}` },
@@ -23,7 +24,7 @@ notificationsRouter.get('/', requireAuth, asyncHandler(async (req, res) => {
 }));
 
 notificationsRouter.post('/read-all', requireAuth, asyncHandler(async (req, res) => {
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: NOTIFICATIONS_TABLE,
       KeyConditionExpression: 'pk = :pk',
       FilterExpression: '#r = :f',
@@ -31,7 +32,7 @@ notificationsRouter.post('/read-all', requireAuth, asyncHandler(async (req, res)
       ExpressionAttributeValues: { ':pk': `USER#${req.recruiterEmail}`, ':f': false },
     }));
     await Promise.all((result.Items || []).map(n =>
-      ddb.send(new UpdateCommand({
+      ddbSend(new UpdateCommand({
         TableName: NOTIFICATIONS_TABLE,
         Key: { pk: n.pk, sk: n.sk },
         UpdateExpression: 'SET #r = :t',
@@ -44,7 +45,7 @@ notificationsRouter.post('/read-all', requireAuth, asyncHandler(async (req, res)
 
 notificationsRouter.post('/:id/read', requireAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: NOTIFICATIONS_TABLE,
       KeyConditionExpression: 'pk = :pk',
       FilterExpression: 'notificationId = :nid',
@@ -53,7 +54,7 @@ notificationsRouter.post('/:id/read', requireAuth, asyncHandler(async (req, res)
     }));
     const item = result.Items && result.Items[0];
     if (!item) return res.status(404).json({ error: 'Not found' });
-    await ddb.send(new UpdateCommand({
+    await ddbSend(new UpdateCommand({
       TableName: NOTIFICATIONS_TABLE,
       Key: { pk: item.pk, sk: item.sk },
       UpdateExpression: 'SET #r = :t',
@@ -67,7 +68,7 @@ notificationsRouter.post('/:id/read', requireAuth, asyncHandler(async (req, res)
 export const seekerNotificationsRouter = Router();
 
 seekerNotificationsRouter.get('/', requireSeekerAuth, asyncHandler(async (req, res) => {
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: NOTIFICATIONS_TABLE,
       KeyConditionExpression: 'pk = :pk',
       ExpressionAttributeValues: { ':pk': `USER#${req.seekerId}` },
@@ -78,7 +79,7 @@ seekerNotificationsRouter.get('/', requireSeekerAuth, asyncHandler(async (req, r
 }));
 
 seekerNotificationsRouter.post('/read-all', requireSeekerAuth, asyncHandler(async (req, res) => {
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: NOTIFICATIONS_TABLE,
       KeyConditionExpression: 'pk = :pk',
       FilterExpression: '#r = :f',
@@ -86,7 +87,7 @@ seekerNotificationsRouter.post('/read-all', requireSeekerAuth, asyncHandler(asyn
       ExpressionAttributeValues: { ':pk': `USER#${req.seekerId}`, ':f': false },
     }));
     await Promise.all((result.Items || []).map(n =>
-      ddb.send(new UpdateCommand({
+      ddbSend(new UpdateCommand({
         TableName: NOTIFICATIONS_TABLE,
         Key: { pk: n.pk, sk: n.sk },
         UpdateExpression: 'SET #r = :t',
@@ -99,7 +100,7 @@ seekerNotificationsRouter.post('/read-all', requireSeekerAuth, asyncHandler(asyn
 
 seekerNotificationsRouter.post('/:id/read', requireSeekerAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const result = await ddb.send(new QueryCommand({
+    const result = await ddbSend(new QueryCommand({
       TableName: NOTIFICATIONS_TABLE,
       KeyConditionExpression: 'pk = :pk',
       FilterExpression: 'notificationId = :nid',
@@ -108,7 +109,7 @@ seekerNotificationsRouter.post('/:id/read', requireSeekerAuth, asyncHandler(asyn
     }));
     const item = result.Items && result.Items[0];
     if (!item) return res.status(404).json({ error: 'Not found' });
-    await ddb.send(new UpdateCommand({
+    await ddbSend(new UpdateCommand({
       TableName: NOTIFICATIONS_TABLE,
       Key: { pk: item.pk, sk: item.sk },
       UpdateExpression: 'SET #r = :t',
