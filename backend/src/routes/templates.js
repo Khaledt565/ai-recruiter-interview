@@ -4,25 +4,20 @@ import { Router } from 'express';
 import { PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, QUESTION_TEMPLATES_TABLE } from '../utils/clients.js';
 import { requireAuth } from '../utils/auth.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
 
-router.get('/', requireAuth, async (req, res) => {
-  try {
+router.get('/', requireAuth, asyncHandler(async (req, res) => {
     const result = await ddb.send(new QueryCommand({
       TableName: QUESTION_TEMPLATES_TABLE,
       KeyConditionExpression: 'pk = :pk',
       ExpressionAttributeValues: { ':pk': `RECRUITER#${req.recruiterEmail}` },
     }));
     res.json({ templates: result.Items || [] });
-  } catch (error) {
-    console.error('Error listing question templates:', error);
-    res.status(500).json({ error: 'Failed to list question templates' });
-  }
-});
+}));
 
-router.post('/', requireAuth, async (req, res) => {
-  try {
+router.post('/', requireAuth, asyncHandler(async (req, res) => {
     const { name, questions } = req.body;
     if (!name || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({ error: 'name is required' });
@@ -52,10 +47,6 @@ router.post('/', requireAuth, async (req, res) => {
       },
     }));
     res.status(201).json({ templateId, name: name.trim() });
-  } catch (error) {
-    console.error('Error creating question template:', error);
-    res.status(500).json({ error: 'Failed to create question template' });
-  }
-});
+}));
 
 export default router;

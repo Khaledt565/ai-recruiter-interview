@@ -6,12 +6,12 @@ import { Router } from 'express';
 import { QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, NOTIFICATIONS_TABLE } from '../utils/clients.js';
 import { requireAuth, requireSeekerAuth } from '../utils/auth.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 // ── Recruiter notifications ───────────────────────────────────────────────────
 const notificationsRouter = Router();
 
-notificationsRouter.get('/', requireAuth, async (req, res) => {
-  try {
+notificationsRouter.get('/', requireAuth, asyncHandler(async (req, res) => {
     const result = await ddb.send(new QueryCommand({
       TableName: NOTIFICATIONS_TABLE,
       KeyConditionExpression: 'pk = :pk',
@@ -20,14 +20,9 @@ notificationsRouter.get('/', requireAuth, async (req, res) => {
       Limit: 50,
     }));
     res.json({ notifications: result.Items || [] });
-  } catch (err) {
-    console.error('GET /notifications error:', err);
-    res.status(500).json({ error: 'Failed to load notifications' });
-  }
-});
+}));
 
-notificationsRouter.post('/read-all', requireAuth, async (req, res) => {
-  try {
+notificationsRouter.post('/read-all', requireAuth, asyncHandler(async (req, res) => {
     const result = await ddb.send(new QueryCommand({
       TableName: NOTIFICATIONS_TABLE,
       KeyConditionExpression: 'pk = :pk',
@@ -45,14 +40,9 @@ notificationsRouter.post('/read-all', requireAuth, async (req, res) => {
       }))
     ));
     res.json({ ok: true });
-  } catch (err) {
-    console.error('POST /notifications/read-all error:', err);
-    res.status(500).json({ error: 'Failed to mark notifications read' });
-  }
-});
+}));
 
-notificationsRouter.post('/:id/read', requireAuth, async (req, res) => {
-  try {
+notificationsRouter.post('/:id/read', requireAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const result = await ddb.send(new QueryCommand({
       TableName: NOTIFICATIONS_TABLE,
@@ -71,17 +61,12 @@ notificationsRouter.post('/:id/read', requireAuth, async (req, res) => {
       ExpressionAttributeValues: { ':t': true },
     }));
     res.json({ ok: true });
-  } catch (err) {
-    console.error('POST /notifications/:id/read error:', err);
-    res.status(500).json({ error: 'Failed to mark notification read' });
-  }
-});
+}));
 
 // ── Seeker notifications ──────────────────────────────────────────────────────
 export const seekerNotificationsRouter = Router();
 
-seekerNotificationsRouter.get('/', requireSeekerAuth, async (req, res) => {
-  try {
+seekerNotificationsRouter.get('/', requireSeekerAuth, asyncHandler(async (req, res) => {
     const result = await ddb.send(new QueryCommand({
       TableName: NOTIFICATIONS_TABLE,
       KeyConditionExpression: 'pk = :pk',
@@ -90,14 +75,9 @@ seekerNotificationsRouter.get('/', requireSeekerAuth, async (req, res) => {
       Limit: 50,
     }));
     res.json({ notifications: result.Items || [] });
-  } catch (err) {
-    console.error('GET /seeker/notifications error:', err);
-    res.status(500).json({ error: 'Failed to load notifications' });
-  }
-});
+}));
 
-seekerNotificationsRouter.post('/read-all', requireSeekerAuth, async (req, res) => {
-  try {
+seekerNotificationsRouter.post('/read-all', requireSeekerAuth, asyncHandler(async (req, res) => {
     const result = await ddb.send(new QueryCommand({
       TableName: NOTIFICATIONS_TABLE,
       KeyConditionExpression: 'pk = :pk',
@@ -115,14 +95,9 @@ seekerNotificationsRouter.post('/read-all', requireSeekerAuth, async (req, res) 
       }))
     ));
     res.json({ ok: true });
-  } catch (err) {
-    console.error('POST /seeker/notifications/read-all error:', err);
-    res.status(500).json({ error: 'Failed to mark notifications read' });
-  }
-});
+}));
 
-seekerNotificationsRouter.post('/:id/read', requireSeekerAuth, async (req, res) => {
-  try {
+seekerNotificationsRouter.post('/:id/read', requireSeekerAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const result = await ddb.send(new QueryCommand({
       TableName: NOTIFICATIONS_TABLE,
@@ -141,10 +116,6 @@ seekerNotificationsRouter.post('/:id/read', requireSeekerAuth, async (req, res) 
       ExpressionAttributeValues: { ':t': true },
     }));
     res.json({ ok: true });
-  } catch (err) {
-    console.error('POST /seeker/notifications/:id/read error:', err);
-    res.status(500).json({ error: 'Failed to mark notification read' });
-  }
-});
+}));
 
 export default notificationsRouter;

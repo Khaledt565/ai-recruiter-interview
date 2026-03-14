@@ -6,12 +6,12 @@ import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/li
 import { ddb, APPLICATIONS_TABLE, JOBS_TABLE, MESSAGES_TABLE, USERS_TABLE } from '../utils/clients.js';
 import { requireSeekerAuth } from '../utils/auth.js';
 import { createNotification, notifyStatusChange } from '../utils/notifications.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
 
 // ── GET /seeker/applications ───────────────────────────────────────────────────
-router.get('/applications', requireSeekerAuth, async (req, res) => {
-  try {
+router.get('/applications', requireSeekerAuth, asyncHandler(async (req, res) => {
     const result = await ddb.send(new QueryCommand({
       TableName: APPLICATIONS_TABLE,
       IndexName: 'ApplicationsBySeeker',
@@ -54,15 +54,10 @@ router.get('/applications', requireSeekerAuth, async (req, res) => {
     }
 
     res.json({ applications: apps });
-  } catch (error) {
-    console.error('Error fetching seeker applications:', error);
-    res.status(500).json({ error: 'Failed to fetch applications' });
-  }
-});
+}));
 
 // ── GET /seeker/applications/:id ──────────────────────────────────────────────
-router.get('/applications/:id', requireSeekerAuth, async (req, res) => {
-  try {
+router.get('/applications/:id', requireSeekerAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id || typeof id !== 'string' || id.length > 100) {
       return res.status(400).json({ error: 'Invalid application ID' });
@@ -105,15 +100,10 @@ router.get('/applications/:id', requireSeekerAuth, async (req, res) => {
       appliedAt:          app.appliedAt,
       updatedAt:          app.updatedAt,
     });
-  } catch (error) {
-    console.error('Error fetching seeker application detail:', error);
-    res.status(500).json({ error: 'Failed to fetch application' });
-  }
-});
+}));
 
 // ── POST /seeker/applications/:id/withdraw ────────────────────────────────────
-router.post('/applications/:id/withdraw', requireSeekerAuth, async (req, res) => {
-  try {
+router.post('/applications/:id/withdraw', requireSeekerAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const appResult = await ddb.send(new QueryCommand({
       TableName: APPLICATIONS_TABLE,
@@ -140,15 +130,10 @@ router.post('/applications/:id/withdraw', requireSeekerAuth, async (req, res) =>
       jobTitle: app.jobTitle || null,
     }).catch(() => {});
     res.json({ applicationId: id, status: 'withdrawn' });
-  } catch (err) {
-    console.error('POST /seeker/applications/:id/withdraw error:', err);
-    res.status(500).json({ error: 'Failed to withdraw application' });
-  }
-});
+}));
 
 // ── GET /seeker/applications/:id/messages ─────────────────────────────────────
-router.get('/applications/:id/messages', requireSeekerAuth, async (req, res) => {
-  try {
+router.get('/applications/:id/messages', requireSeekerAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id || typeof id !== 'string' || id.length > 100) return res.status(400).json({ error: 'Invalid id' });
     const appResult = await ddb.send(new QueryCommand({
@@ -168,15 +153,10 @@ router.get('/applications/:id/messages', requireSeekerAuth, async (req, res) => 
       ScanIndexForward: true,
     }));
     res.json({ messages: result.Items || [] });
-  } catch (err) {
-    console.error('GET /seeker/applications/:id/messages error:', err);
-    res.status(500).json({ error: 'Failed to load messages' });
-  }
-});
+}));
 
 // ── POST /seeker/applications/:id/messages ────────────────────────────────────
-router.post('/applications/:id/messages', requireSeekerAuth, async (req, res) => {
-  try {
+router.post('/applications/:id/messages', requireSeekerAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { body: msgBody } = req.body;
     if (!id || typeof id !== 'string' || id.length > 100) return res.status(400).json({ error: 'Invalid id' });
@@ -218,10 +198,6 @@ router.post('/applications/:id/messages', requireSeekerAuth, async (req, res) =>
       ).catch(() => {});
     }
     res.status(201).json({ message });
-  } catch (err) {
-    console.error('POST /seeker/applications/:id/messages error:', err);
-    res.status(500).json({ error: 'Failed to send message' });
-  }
-});
+}));
 
 export default router;

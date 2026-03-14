@@ -24,6 +24,7 @@ import seekerAuthRouter from './routes/seeker-auth.js';
 import seekerProfileRouter from './routes/seeker-profile.js';
 import seekerApplicationsRouter from './routes/seeker-applications.js';
 import notificationsRouter, { seekerNotificationsRouter } from './routes/notifications.js';
+import { errorHandler } from './middleware/errorHandler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -61,6 +62,9 @@ app.get('/health', (req, res) => {
     message: 'GitHub Actions deployment - credentials corrected',
   });
 });
+
+// Global error handler — must be registered after all routes.
+app.use(errorHandler);
 
 // Load HTTPS certificate and key
 const certPath = path.join(__dirname, '../certs/server.crt');

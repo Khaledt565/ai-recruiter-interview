@@ -6,12 +6,12 @@ import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { ddb, s3, USERS_TABLE, S3_CV_BUCKET, REGION } from '../utils/clients.js';
 import { requireSeekerAuth } from '../utils/auth.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
 
 // ── GET /seeker/profile ───────────────────────────────────────────────────────
-router.get('/profile', requireSeekerAuth, async (req, res) => {
-  try {
+router.get('/profile', requireSeekerAuth, asyncHandler(async (req, res) => {
     const result = await ddb.send(new GetCommand({
       TableName: USERS_TABLE,
       Key: { pk: `USER#${req.seekerId}`, sk: 'PROFILE' },
@@ -30,15 +30,10 @@ router.get('/profile', requireSeekerAuth, async (req, res) => {
       profileComplete: u.profileComplete || 0,
       createdAt:       u.createdAt,
     });
-  } catch (error) {
-    console.error('Error fetching seeker profile:', error);
-    res.status(500).json({ error: 'Failed to fetch profile' });
-  }
-});
+}));
 
 // ── PUT /seeker/profile ───────────────────────────────────────────────────────
-router.put('/profile', requireSeekerAuth, async (req, res) => {
-  try {
+router.put('/profile', requireSeekerAuth, asyncHandler(async (req, res) => {
     const { fullName, location, skills, availability, bio } = req.body;
     const validAvailabilities = ['immediately', '2_weeks', '1_month', '3_months', 'not_looking'];
 
@@ -75,15 +70,10 @@ router.put('/profile', requireSeekerAuth, async (req, res) => {
 
     await ddb.send(new PutCommand({ TableName: USERS_TABLE, Item: merged }));
     res.json({ profileComplete: merged.profileComplete });
-  } catch (error) {
-    console.error('Error updating seeker profile:', error);
-    res.status(500).json({ error: 'Failed to update profile' });
-  }
-});
+}));
 
 // ── POST /seeker/profile/cv ───────────────────────────────────────────────────
-router.post('/profile/cv', requireSeekerAuth, async (req, res) => {
-  try {
+router.post('/profile/cv', requireSeekerAuth, asyncHandler(async (req, res) => {
     const { base64, mimeType, filename } = req.body;
     if (!base64 || typeof base64 !== 'string') {
       return res.status(400).json({ error: 'base64 file data is required' });
@@ -131,10 +121,6 @@ router.post('/profile/cv', requireSeekerAuth, async (req, res) => {
     }
 
     res.json({ cvUrl, s3Key });
-  } catch (error) {
-    console.error('Error uploading CV:', error);
-    res.status(500).json({ error: 'Failed to upload CV' });
-  }
-});
+}));
 
 export default router;

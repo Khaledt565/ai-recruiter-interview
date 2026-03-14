@@ -13,6 +13,7 @@ import { requireAuth, generateLinkToken } from '../utils/auth.js';
 import { scoreProfileWithAI } from '../bedrock-client.js';
 import { sendCandidateInvitationEmail, sendRecruiterLowScoreEmail } from '../utils/email.js';
 import { createNotification, notifyStatusChange } from '../utils/notifications.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
 
@@ -25,8 +26,7 @@ const VALID_PIPELINE_STATUSES = [
 // POST /applications
 // Seeker submits application, AI scores profile, auto-invites if above threshold.
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/', async (req, res) => {
-  try {
+router.post('/', asyncHandler(async (req, res) => {
     const { jobId, seekerId, candidateName, candidateEmail, cvText, coverLetter } = req.body;
 
     if (!jobId || !seekerId || !candidateName || !candidateEmail || !cvText) {
@@ -183,15 +183,10 @@ router.post('/', async (req, res) => {
       interviewMode,
       expiresAt,
     });
-  } catch (error) {
-    console.error('Error processing application:', error);
-    res.status(500).json({ error: 'Failed to process application' });
-  }
-});
+}));
 
 // ── GET /applications ──────────────────────────────────────────────────────────
-router.get('/', requireAuth, async (req, res) => {
-  try {
+router.get('/', requireAuth, asyncHandler(async (req, res) => {
     const result = await ddb.send(new QueryCommand({
       TableName: APPLICATIONS_TABLE,
       IndexName: 'ApplicationsByRecruiter',
@@ -199,15 +194,10 @@ router.get('/', requireAuth, async (req, res) => {
       ExpressionAttributeValues: { ':rid': req.recruiterEmail },
     }));
     res.json({ applications: result.Items || [] });
-  } catch (error) {
-    console.error('Error listing applications:', error);
-    res.status(500).json({ error: 'Failed to list applications' });
-  }
-});
+}));
 
 // ── PATCH /applications/:applicationId/status ──────────────────────────────────
-router.patch('/:applicationId/status', requireAuth, async (req, res) => {
-  try {
+router.patch('/:applicationId/status', requireAuth, asyncHandler(async (req, res) => {
     const { applicationId } = req.params;
     const { status, jobId } = req.body;
     if (!status || !VALID_PIPELINE_STATUSES.includes(status)) {
@@ -240,15 +230,10 @@ router.patch('/:applicationId/status', requireAuth, async (req, res) => {
       }).catch(() => {});
     }
     res.json({ applicationId, status });
-  } catch (error) {
-    console.error('Error updating application status:', error);
-    res.status(500).json({ error: 'Failed to update application status' });
-  }
-});
+}));
 
 // ── GET /applications/:applicationId/report ────────────────────────────────────
-router.get('/:applicationId/report', requireAuth, async (req, res) => {
-  try {
+router.get('/:applicationId/report', requireAuth, asyncHandler(async (req, res) => {
     const { applicationId } = req.params;
     const { jobId } = req.query;
     if (!jobId || typeof jobId !== 'string') {
@@ -280,15 +265,10 @@ router.get('/:applicationId/report', requireAuth, async (req, res) => {
       transcript = histRes.Item ? (histRes.Item.history || null) : null;
     }
     res.json({ application, report, transcript });
-  } catch (error) {
-    console.error('Error fetching application report:', error);
-    res.status(500).json({ error: 'Failed to fetch application report' });
-  }
-});
+}));
 
 // ── GET /applications/:id/messages ────────────────────────────────────────────
-router.get('/:id/messages', requireAuth, async (req, res) => {
-  try {
+router.get('/:id/messages', requireAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     if (!id || typeof id !== 'string' || id.length > 100) return res.status(400).json({ error: 'Invalid id' });
     const result = await ddb.send(new QueryCommand({
@@ -298,15 +278,10 @@ router.get('/:id/messages', requireAuth, async (req, res) => {
       ScanIndexForward: true,
     }));
     res.json({ messages: result.Items || [] });
-  } catch (err) {
-    console.error('GET /applications/:id/messages error:', err);
-    res.status(500).json({ error: 'Failed to load messages' });
-  }
-});
+}));
 
 // ── POST /applications/:id/messages ───────────────────────────────────────────
-router.post('/:id/messages', requireAuth, async (req, res) => {
-  try {
+router.post('/:id/messages', requireAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { body: msgBody, jobId } = req.body;
     if (!id || typeof id !== 'string' || id.length > 100) return res.status(400).json({ error: 'Invalid id' });
@@ -337,10 +312,6 @@ router.post('/:id/messages', requireAuth, async (req, res) => {
       }
     }
     res.status(201).json({ message });
-  } catch (err) {
-    console.error('POST /applications/:id/messages error:', err);
-    res.status(500).json({ error: 'Failed to send message' });
-  }
-});
+}));
 
 export default router;

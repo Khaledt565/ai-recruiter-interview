@@ -8,12 +8,12 @@ import { SendEmailCommand } from '@aws-sdk/client-ses';
 import { PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, ses, USERS_TABLE, SEEKER_JWT_SECRET, SES_FROM_EMAIL, FRONTEND_URL } from '../utils/clients.js';
 import { seekerAuthLimiter, hashPassword, verifyPassword } from '../utils/auth.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
 
 // ── POST /seeker/auth/signup ──────────────────────────────────────────────────
-router.post('/signup', seekerAuthLimiter, async (req, res) => {
-  try {
+router.post('/signup', seekerAuthLimiter, asyncHandler(async (req, res) => {
     const { email, password, fullName } = req.body;
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       return res.status(400).json({ error: 'Valid email is required' });
@@ -68,15 +68,10 @@ router.post('/signup', seekerAuthLimiter, async (req, res) => {
     );
     console.log(`[Seeker] Signup: ${normalEmail} (${userId})`);
     res.status(201).json({ token, userId, email: normalEmail, fullName: fullName.trim() });
-  } catch (error) {
-    console.error('Error in seeker signup:', error);
-    res.status(500).json({ error: 'Failed to create account' });
-  }
-});
+}));
 
 // ── POST /seeker/auth/login ───────────────────────────────────────────────────
-router.post('/login', seekerAuthLimiter, async (req, res) => {
-  try {
+router.post('/login', seekerAuthLimiter, asyncHandler(async (req, res) => {
     const { email, password } = req.body; // pragma: allowlist secret
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
@@ -105,15 +100,10 @@ router.post('/login', seekerAuthLimiter, async (req, res) => {
       fullName:        user.fullName || '',
       profileComplete: user.profileComplete || 0,
     });
-  } catch (error) {
-    console.error('Error in seeker login:', error);
-    res.status(500).json({ error: 'Failed to log in' });
-  }
-});
+}));
 
 // ── POST /seeker/auth/forgot-password ─────────────────────────────────────────
-router.post('/forgot-password', seekerAuthLimiter, async (req, res) => {
-  try {
+router.post('/forgot-password', seekerAuthLimiter, asyncHandler(async (req, res) => {
     const { email } = req.body;
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       return res.status(400).json({ error: 'Valid email is required' });
@@ -166,15 +156,10 @@ router.post('/forgot-password', seekerAuthLimiter, async (req, res) => {
     }
 
     res.json({ message: 'If that email is registered, a reset link has been sent.' });
-  } catch (err) {
-    console.error('POST /seeker/auth/forgot-password error:', err);
-    res.status(500).json({ error: 'Failed to process request' });
-  }
-});
+}));
 
 // ── POST /seeker/auth/reset-password ──────────────────────────────────────────
-router.post('/reset-password', seekerAuthLimiter, async (req, res) => {
-  try {
+router.post('/reset-password', seekerAuthLimiter, asyncHandler(async (req, res) => {
     const { email, token, newPassword } = req.body;
     if (!email || !token || !newPassword) {
       return res.status(400).json({ error: 'email, token, and newPassword are required' });
@@ -212,10 +197,6 @@ router.post('/reset-password', seekerAuthLimiter, async (req, res) => {
 
     console.log(`[Seeker] Password reset for ${normalEmail}`);
     res.json({ message: 'Password updated successfully' });
-  } catch (err) {
-    console.error('POST /seeker/auth/reset-password error:', err);
-    res.status(500).json({ error: 'Failed to reset password' });
-  }
-});
+}));
 
 export default router;

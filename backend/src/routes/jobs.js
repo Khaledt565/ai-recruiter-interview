@@ -5,12 +5,12 @@ import { Router }  from 'express';
 import { PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { ddb, JOBS_TABLE, QUESTION_TEMPLATES_TABLE } from '../utils/clients.js';
 import { requireAuth } from '../utils/auth.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 // ── Recruiter routes — mount at /jobs ─────────────────────────────────────────
 const jobsRouter = Router();
 
-jobsRouter.get('/', requireAuth, async (req, res) => {
-  try {
+jobsRouter.get('/', requireAuth, asyncHandler(async (req, res) => {
     const result = await ddb.send(new QueryCommand({
       TableName: JOBS_TABLE,
       KeyConditionExpression: 'pk = :pk',
@@ -18,14 +18,9 @@ jobsRouter.get('/', requireAuth, async (req, res) => {
       ScanIndexForward: false,
     }));
     res.json({ jobs: result.Items || [] });
-  } catch (error) {
-    console.error('Error listing jobs:', error);
-    res.status(500).json({ error: 'Failed to list jobs' });
-  }
-});
+}));
 
-jobsRouter.post('/', requireAuth, async (req, res) => {
-  try {
+jobsRouter.post('/', requireAuth, asyncHandler(async (req, res) => {
     const {
       title, description, requirements, location, employmentType,
       salaryMin, salaryMax, salaryCurrency,
@@ -96,17 +91,12 @@ jobsRouter.post('/', requireAuth, async (req, res) => {
 
     console.log(`[Jobs] Created job "${title.trim()}" (${jobId}) status=${jobStatus} by ${req.recruiterEmail}`);
     res.status(201).json({ jobId, status: jobStatus });
-  } catch (error) {
-    console.error('Error creating job:', error);
-    res.status(500).json({ error: 'Failed to create job' });
-  }
-});
+}));
 
 // ── Public routes — mount at /public/jobs ─────────────────────────────────────
 export const publicJobsRouter = Router();
 
-publicJobsRouter.get('/', async (req, res) => {
-  try {
+publicJobsRouter.get('/', asyncHandler(async (req, res) => {
     const { search, location, employmentType } = req.query;
     const result = await ddb.send(new QueryCommand({
       TableName: JOBS_TABLE,
@@ -144,14 +134,9 @@ publicJobsRouter.get('/', async (req, res) => {
     }));
 
     res.json({ jobs: publicJobs });
-  } catch (error) {
-    console.error('Error listing public jobs:', error);
-    res.status(500).json({ error: 'Failed to list jobs' });
-  }
-});
+}));
 
-publicJobsRouter.get('/:jobId', async (req, res) => {
-  try {
+publicJobsRouter.get('/:jobId', asyncHandler(async (req, res) => {
     const { jobId } = req.params;
     if (!jobId || typeof jobId !== 'string' || jobId.length > 100) {
       return res.status(400).json({ error: 'Invalid job ID' });
@@ -178,10 +163,6 @@ publicJobsRouter.get('/:jobId', async (req, res) => {
       interviewMode:  job.interviewMode,
       createdAt:      job.createdAt,
     });
-  } catch (error) {
-    console.error('Error fetching public job:', error);
-    res.status(500).json({ error: 'Failed to fetch job' });
-  }
-});
+}));
 
 export default jobsRouter;

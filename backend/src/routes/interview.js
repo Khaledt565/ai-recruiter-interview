@@ -8,27 +8,22 @@ import { suggestQuestionsFromCV } from '../bedrock-client.js';
 import { sendCandidateInvitationEmail } from '../utils/email.js';
 import { processTranscript } from '../interview-engine.js';
 import { saveInterviewSnapshot, generateSpeech } from '../utils/pipeline.js';
+import { asyncHandler } from '../middleware/errorHandler.js';
 
 const router = Router();
 
 // ── POST /interview/suggest-questions ─────────────────────────────────────────
-router.post('/suggest-questions', requireAuth, async (req, res) => {
-  try {
+router.post('/suggest-questions', requireAuth, asyncHandler(async (req, res) => {
     const { text } = req.body;
     if (!text || typeof text !== 'string' || text.trim().length < 20) {
       return res.status(400).json({ error: 'Please provide more CV/JD text to generate questions from.' });
     }
     const questions = await suggestQuestionsFromCV(text);
     res.json({ questions });
-  } catch (err) {
-    console.error('Error suggesting questions:', err.message);
-    res.status(500).json({ error: 'Failed to generate questions. Please try again.' });
-  }
-});
+}));
 
 // ── POST /interview/create ────────────────────────────────────────────────────
-router.post('/create', requireAuth, async (req, res) => {
-  try {
+router.post('/create', requireAuth, asyncHandler(async (req, res) => {
     const { candidateName, jobDescription, customQuestions } = req.body;
     const candidateEmail = (req.body.candidateEmail || '').toLowerCase().trim();
     const recruiterEmail = (req.body.recruiterEmail || '').toLowerCase().trim();
@@ -68,15 +63,10 @@ router.post('/create', requireAuth, async (req, res) => {
 
     console.log(`✅ Created interview link for ${candidateName}`);
     res.json({ interviewId, attendeeId, interviewLink, candidateName, candidateEmail, expiresAt });
-  } catch (error) {
-    console.error('Error creating interview:', error);
-    res.status(500).json({ error: 'Failed to create interview link' });
-  }
-});
+}));
 
 // ── GET /interview/result/:interviewId ────────────────────────────────────────
-router.get('/result/:interviewId', async (req, res) => {
-  try {
+router.get('/result/:interviewId', asyncHandler(async (req, res) => {
     const { interviewId } = req.params;
     if (!interviewId || typeof interviewId !== 'string' || interviewId.length > 100) {
       return res.status(400).json({ error: 'Invalid interview ID' });
@@ -91,15 +81,10 @@ router.get('/result/:interviewId', async (req, res) => {
       status: result.Item.status,
       completedAt: result.Item.updatedAt || null,
     });
-  } catch (error) {
-    console.error('Error fetching interview result:', error);
-    res.status(500).json({ error: 'Failed to fetch result' });
-  }
-});
+}));
 
 // ── GET /interview/validate/:interviewId ──────────────────────────────────────
-router.get('/validate/:interviewId', async (req, res) => {
-  try {
+router.get('/validate/:interviewId', asyncHandler(async (req, res) => {
     const { interviewId } = req.params;
     const { token } = req.query;
 
@@ -123,15 +108,10 @@ router.get('/validate/:interviewId', async (req, res) => {
       interviewId:   result.Item.interviewId,
       jobDescription: result.Item.jobDescription || null,
     });
-  } catch (error) {
-    console.error('Error validating interview:', error);
-    res.status(500).json({ error: 'Failed to validate interview' });
-  }
-});
+}));
 
 // ── GET /interview/sessions ───────────────────────────────────────────────────
-router.get('/sessions', requireAuth, async (req, res) => {
-  try {
+router.get('/sessions', requireAuth, asyncHandler(async (req, res) => {
     const { recruiterEmail } = req.query;
     if (!recruiterEmail || typeof recruiterEmail !== 'string') {
       return res.status(400).json({ error: 'recruiterEmail query param is required' });
@@ -156,15 +136,10 @@ router.get('/sessions', requireAuth, async (req, res) => {
         expiresAt:      item.expiresAt || null,
       }));
     res.json({ sessions });
-  } catch (error) {
-    console.error('Error listing sessions:', error);
-    res.status(500).json({ error: 'Failed to list sessions' });
-  }
-});
+}));
 
 // ── GET /interview/transcript/:interviewId ────────────────────────────────────
-router.get('/transcript/:interviewId', requireAuth, async (req, res) => {
-  try {
+router.get('/transcript/:interviewId', requireAuth, asyncHandler(async (req, res) => {
     const { interviewId } = req.params;
     if (!interviewId || typeof interviewId !== 'string' || interviewId.length > 100) {
       return res.status(400).json({ error: 'Invalid interview ID' });
@@ -185,15 +160,10 @@ router.get('/transcript/:interviewId', requireAuth, async (req, res) => {
       turn: i + 1, question: h.q, candidateAnswer: h.a, aiReply: h.reply, timestamp: h.t,
     }));
     res.json({ conversation, turns: conversation.length });
-  } catch (error) {
-    console.error('Error fetching transcript:', error);
-    res.status(500).json({ error: 'Failed to fetch transcript' });
-  }
-});
+}));
 
 // ── DELETE /interview/:interviewId ────────────────────────────────────────────
-router.delete('/:interviewId', requireAuth, async (req, res) => {
-  try {
+router.delete('/:interviewId', requireAuth, asyncHandler(async (req, res) => {
     const { interviewId } = req.params;
     if (!interviewId || typeof interviewId !== 'string' || interviewId.length > 100) {
       return res.status(400).json({ error: 'Invalid interview ID' });
@@ -208,15 +178,10 @@ router.delete('/:interviewId', requireAuth, async (req, res) => {
       ExpressionAttributeValues: { ':a': true, ':now': new Date().toISOString() },
     }));
     res.json({ success: true });
-  } catch (error) {
-    console.error('Error archiving interview:', error);
-    res.status(500).json({ error: 'Failed to archive interview' });
-  }
-});
+}));
 
 // ── POST /interview/resend-invite/:interviewId ────────────────────────────────
-router.post('/resend-invite/:interviewId', requireAuth, async (req, res) => {
-  try {
+router.post('/resend-invite/:interviewId', requireAuth, asyncHandler(async (req, res) => {
     const { interviewId } = req.params;
     if (!interviewId || typeof interviewId !== 'string' || interviewId.length > 100) {
       return res.status(400).json({ error: 'Invalid interview ID' });
@@ -228,15 +193,10 @@ router.post('/resend-invite/:interviewId', requireAuth, async (req, res) => {
     const interviewLink = `${FRONTEND_URL}/interview.html?id=${interviewId}`;
     await sendCandidateInvitationEmail(candidateName, candidateEmail, interviewLink);
     res.json({ success: true });
-  } catch (error) {
-    console.error('Error resending invite:', error);
-    res.status(500).json({ error: 'Failed to resend invitation' });
-  }
-});
+}));
 
 // ── POST /interview/regenerate/:interviewId ───────────────────────────────────
-router.post('/regenerate/:interviewId', requireAuth, async (req, res) => {
-  try {
+router.post('/regenerate/:interviewId', requireAuth, asyncHandler(async (req, res) => {
     const { interviewId } = req.params;
     if (!interviewId || typeof interviewId !== 'string' || interviewId.length > 100) {
       return res.status(400).json({ error: 'Invalid interview ID' });
@@ -256,15 +216,10 @@ router.post('/regenerate/:interviewId', requireAuth, async (req, res) => {
     const linkToken     = generateLinkToken(interviewId);
     const interviewLink = `${FRONTEND_URL}/interview.html?id=${interviewId}&token=${linkToken}`;
     res.json({ success: true, expiresAt: newExpiry, interviewLink });
-  } catch (error) {
-    console.error('Error regenerating link:', error);
-    res.status(500).json({ error: 'Failed to regenerate link' });
-  }
-});
+}));
 
 // ── POST /interview/process ───────────────────────────────────────────────────
-router.post('/process', async (req, res) => {
-  try {
+router.post('/process', asyncHandler(async (req, res) => {
     const { meetingId, attendeeId, transcriptText, isInit, token } = req.body;
 
     if (!meetingId || typeof meetingId !== 'string' || meetingId.length > 100) {
@@ -314,10 +269,6 @@ router.post('/process', async (req, res) => {
     }
 
     res.json(result);
-  } catch (error) {
-    console.error('Error processing interview:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
+}));
 
 export default router;
