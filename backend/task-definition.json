@@ -36,6 +36,14 @@
         {
           "name": "LINK_SECRET",
           "value": "ai-recruiter-link-secret-v1-eu-central-1"
+        },
+        {
+          "name": "SQS_EMAIL_RETRY_QUEUE_URL",
+          "value": ""
+        },
+        {
+          "name": "SQS_SCORING_RETRY_QUEUE_URL",
+          "value": ""
         }
       ],
       "logConfiguration": {

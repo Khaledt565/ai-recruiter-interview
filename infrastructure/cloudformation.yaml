@@ -185,6 +185,62 @@ Resources:
                 Action:
                   - polly:SynthesizeSpeech
                 Resource: "*"
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource:
+                  - !GetAtt EmailRetryQueue.Arn
+                  - !GetAtt ScoringRetryQueue.Arn
+
+  # ===================================
+  # SQS Queues for async retries
+  # ===================================
+
+  # Dead-letter queues (messages that fail repeatedly land here for inspection)
+  EmailRetryDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "ai-recruiter-email-retry-dlq-${EnvironmentName}"
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  ScoringRetryDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "ai-recruiter-scoring-retry-dlq-${EnvironmentName}"
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # Main retry queues
+  EmailRetryQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "ai-recruiter-email-retry-${EnvironmentName}"
+      MessageRetentionPeriod: 86400  # 1 day
+      VisibilityTimeout: 60
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt EmailRetryDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  ScoringRetryQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "ai-recruiter-scoring-retry-${EnvironmentName}"
+      MessageRetentionPeriod: 86400  # 1 day
+      VisibilityTimeout: 60
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ScoringRetryDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   # ===================================
   # Security Group
@@ -307,6 +363,10 @@ Resources:
               Value: !Ref InterviewSessionsTable
             - Name: BEDROCK_MODEL_ID
               Value: anthropic.claude-3-haiku-20240307-v1:0
+            - Name: SQS_EMAIL_RETRY_QUEUE_URL
+              Value: !Ref EmailRetryQueue
+            - Name: SQS_SCORING_RETRY_QUEUE_URL
+              Value: !Ref ScoringRetryQueue
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -476,3 +536,15 @@ Outputs:
     Value: !Ref CloudFrontDistribution
     Export:
       Name: !Sub "${AWS::StackName}-CloudFrontDistributionId"
+
+  EmailRetryQueueUrl:
+    Description: SQS queue URL for failed SES email retries
+    Value: !Ref EmailRetryQueue
+    Export:
+      Name: !Sub "${AWS::StackName}-EmailRetryQueueUrl"
+
+  ScoringRetryQueueUrl:
+    Description: SQS queue URL for failed AI scoring retries
+    Value: !Ref ScoringRetryQueue
+    Export:
+      Name: !Sub "${AWS::StackName}-ScoringRetryQueueUrl"
