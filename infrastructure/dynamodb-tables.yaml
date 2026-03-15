@@ -11,7 +11,6 @@ Parameters:
       - prod
 
 Resources:
-
   # ===================================
   # Jobs
   # pk = RECRUITER#<recruiterId>
@@ -24,11 +23,11 @@ Resources:
       TableName: !Sub "Jobs-${EnvironmentName}"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: pk               # RECRUITER#<recruiterId>
+        - AttributeName: pk # RECRUITER#<recruiterId>
           AttributeType: S
-        - AttributeName: sk               # JOB#<jobId>
+        - AttributeName: sk # JOB#<jobId>
           AttributeType: S
-        - AttributeName: status           # open | paused | closed
+        - AttributeName: status # open | paused | closed
           AttributeType: S
         - AttributeName: jobId
           AttributeType: S
@@ -75,9 +74,9 @@ Resources:
       TableName: !Sub "Applications-${EnvironmentName}"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: pk               # JOB#<jobId>
+        - AttributeName: pk # JOB#<jobId>
           AttributeType: S
-        - AttributeName: sk               # APPLICATION#<applicationId>
+        - AttributeName: sk # APPLICATION#<applicationId>
           AttributeType: S
         - AttributeName: seekerId
           AttributeType: S
@@ -151,9 +150,9 @@ Resources:
       TableName: !Sub "AIInterviewSessions-${EnvironmentName}"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: pk               # APPLICATION#<applicationId>
+        - AttributeName: pk # APPLICATION#<applicationId>
           AttributeType: S
-        - AttributeName: sk               # SESSION#<sessionId>
+        - AttributeName: sk # SESSION#<sessionId>
           AttributeType: S
         - AttributeName: sessionId
           AttributeType: S
@@ -199,9 +198,9 @@ Resources:
       TableName: !Sub "InterviewQuestions-${EnvironmentName}"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: pk               # SESSION#<sessionId>
+        - AttributeName: pk # SESSION#<sessionId>
           AttributeType: S
-        - AttributeName: sk               # Q#<orderIndex zero-padded>
+        - AttributeName: sk # Q#<orderIndex zero-padded>
           AttributeType: S
       KeySchema:
         - AttributeName: pk
@@ -227,9 +226,9 @@ Resources:
       TableName: !Sub "InterviewReports-${EnvironmentName}"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: pk               # SESSION#<sessionId>
+        - AttributeName: pk # SESSION#<sessionId>
           AttributeType: S
-        - AttributeName: sk               # REPORT
+        - AttributeName: sk # REPORT
           AttributeType: S
         - AttributeName: applicationId
           AttributeType: S
@@ -266,9 +265,9 @@ Resources:
       TableName: !Sub "QuestionTemplates-${EnvironmentName}"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: pk               # RECRUITER#<recruiterId>
+        - AttributeName: pk # RECRUITER#<recruiterId>
           AttributeType: S
-        - AttributeName: sk               # TEMPLATE#<templateId>
+        - AttributeName: sk # TEMPLATE#<templateId>
           AttributeType: S
         - AttributeName: templateId
           AttributeType: S
@@ -303,9 +302,9 @@ Resources:
       TableName: !Sub "Messages-${EnvironmentName}"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: pk               # APPLICATION#<applicationId>
+        - AttributeName: pk # APPLICATION#<applicationId>
           AttributeType: S
-        - AttributeName: sk               # MSG#<timestamp>#<messageId>
+        - AttributeName: sk # MSG#<timestamp>#<messageId>
           AttributeType: S
         - AttributeName: senderId
           AttributeType: S
@@ -345,9 +344,9 @@ Resources:
       TableName: !Sub "Notifications-${EnvironmentName}"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: pk               # USER#<userId>
+        - AttributeName: pk # USER#<userId>
           AttributeType: S
-        - AttributeName: sk               # NOTIF#<timestamp>#<notificationId>
+        - AttributeName: sk # NOTIF#<timestamp>#<notificationId>
           AttributeType: S
         - AttributeName: applicationId
           AttributeType: S
@@ -387,9 +386,9 @@ Resources:
       TableName: !Sub "Users-${EnvironmentName}"
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: pk               # USER#<userId>
+        - AttributeName: pk # USER#<userId>
           AttributeType: S
-        - AttributeName: sk               # PROFILE
+        - AttributeName: sk # PROFILE
           AttributeType: S
         - AttributeName: email
           AttributeType: S

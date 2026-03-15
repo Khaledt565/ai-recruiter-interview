@@ -202,7 +202,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "ai-recruiter-email-retry-dlq-${EnvironmentName}"
-      MessageRetentionPeriod: 1209600  # 14 days
+      MessageRetentionPeriod: 1209600 # 14 days
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -211,7 +211,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "ai-recruiter-scoring-retry-dlq-${EnvironmentName}"
-      MessageRetentionPeriod: 1209600  # 14 days
+      MessageRetentionPeriod: 1209600 # 14 days
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -221,7 +221,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "ai-recruiter-email-retry-${EnvironmentName}"
-      MessageRetentionPeriod: 86400  # 1 day
+      MessageRetentionPeriod: 86400 # 1 day
       VisibilityTimeout: 60
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt EmailRetryDLQ.Arn
@@ -234,7 +234,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "ai-recruiter-scoring-retry-${EnvironmentName}"
-      MessageRetentionPeriod: 86400  # 1 day
+      MessageRetentionPeriod: 86400 # 1 day
       VisibilityTimeout: 60
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt ScoringRetryDLQ.Arn
@@ -247,7 +247,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "ai-recruiter-report-retry-dlq-${EnvironmentName}"
-      MessageRetentionPeriod: 1209600  # 14 days
+      MessageRetentionPeriod: 1209600 # 14 days
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -256,7 +256,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "ai-recruiter-report-retry-${EnvironmentName}"
-      MessageRetentionPeriod: 86400  # 1 day
+      MessageRetentionPeriod: 86400 # 1 day
       VisibilityTimeout: 60
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt ReportRetryDLQ.Arn
